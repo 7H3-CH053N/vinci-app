@@ -16,6 +16,7 @@ const DEFAULT_SETTINGS = {
   geminiFallbackModel: 'gemini-2.5-flash',  // Bei 503/Overload: automatischer Wechsel auf dieses Modell
   ollamaModel: 'gemma4',
   ollamaUrl: 'http://localhost:11434',
+  memoryWorkerModel: 'gemma3:4b',
   mailApp: 'Mail',
   ui: {
     fontScale:  1.0,

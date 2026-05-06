@@ -539,6 +539,22 @@ export default function Settings({ onClose }) {
             <p className="hint">Leerlassen, um Obsidian zu deaktivieren. VINCI durchsucht alle .md-Dateien im Ordner und kann neue Notizen in <code>inbox/</code> anlegen (überschreibt nie bestehende).</p>
           </div>
 
+          <div className="field">
+            <label>Knowledge-Graph Modell</label>
+            <select className="inp"
+              value={local.memoryWorkerModel || 'gemma3:4b'}
+              onChange={e => update('memoryWorkerModel', e.target.value)}>
+              <option value="gemma3:4b">gemma3:4b — Default (beste deutsche Qualität, schnell)</option>
+              <option value="qwen3:4b">qwen3:4b</option>
+              <option value="qwen3:8b">qwen3:8b — Maximale Qualität (+2s pro Run)</option>
+              <option value="qwen2.5:3b">qwen2.5:3b — veraltet</option>
+            </select>
+            <p className="hint">
+              Modell für Entity-Extraction (im Hintergrund). Muss in Ollama installiert sein:
+              {' '}<code>ollama pull gemma3:4b</code>
+            </p>
+          </div>
+
           {/* Mac-Vault-Migration ─────────────────────────────────────── */}
           <div className="field" style={{ borderTop: '1px solid var(--border)', paddingTop: 16, marginTop: 8 }}>
             <label style={{ fontSize: 13, fontWeight: 600 }}>Mac-Vault-Migration</label>
