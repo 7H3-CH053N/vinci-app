@@ -312,12 +312,17 @@ export async function geminiChat({ message, history = [], apiKey, model, onToolC
     const text = response.text?.() || ''
     if (!text.trim()) {
       // Modell hat nichts gesagt — kurz nachfragen
+      console.warn('[GEMINI] Empty response, asking for summary retry')
       try {
-        contents.push({ role: 'user', parts: [{ text: 'Bitte fasse das Ergebnis kurz zusammen.' }] })
+        contents.push({ role: 'user', parts: [{ text: 'Bitte beantworte die ursprüngliche Frage. Wenn du dafür web_search brauchst (aktuelle/öffentliche Themen), rufe es jetzt auf.' }] })
         const retry = await geminiModel.generateContent({ contents })
-        return retry.response.text() || 'Erledigt.'
-      } catch {
-        return 'Erledigt.'
+        const retryText = retry.response.text?.() || ''
+        if (retryText.trim()) return retryText
+        console.warn('[GEMINI] Retry also empty — returning honest error')
+        return 'Ich habe keine Antwort generiert. Formulier die Frage bitte anders oder probier "such im Web nach …" als Trigger.'
+      } catch (err) {
+        console.warn('[GEMINI] Retry failed:', err.message)
+        return 'Ich habe keine Antwort generiert. Formulier die Frage bitte anders.'
       }
     }
     return text
