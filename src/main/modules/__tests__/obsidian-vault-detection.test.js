@@ -33,4 +33,17 @@ describe('detectMultipleVaults', () => {
   it('returns false for non-existent path', () => {
     expect(detectMultipleVaults('/nope/does/not/exist')).toBe(false)
   })
+
+  it('returns true for nested vaults (path is a vault AND contains another vault inside)', () => {
+    // Like /Users/.../Vaults/.obsidian + /Users/.../Vaults/VINCI Wissen/.obsidian
+    mkdirSync(join(TMP, '.obsidian'))
+    mkdirSync(join(TMP, 'NestedVault/.obsidian'), { recursive: true })
+    expect(detectMultipleVaults(TMP)).toBe(true)
+  })
+
+  it('returns true for vault two levels deep (Vaults/A/Sub/.obsidian)', () => {
+    mkdirSync(join(TMP, 'A/Sub/.obsidian'), { recursive: true })
+    mkdirSync(join(TMP, '.obsidian'))
+    expect(detectMultipleVaults(TMP)).toBe(true)
+  })
 })

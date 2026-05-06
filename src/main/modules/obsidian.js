@@ -156,18 +156,36 @@ export function detectMultipleVaults(parentPath) {
   try {
     if (!statSync(parentPath).isDirectory()) return false
   } catch { return false }
+
+  // Sammle alle .obsidian/-Vorkommen im Pfad (Path selbst + erste Subdir-Ebene + zweite Subdir-Ebene).
+  // Wenn ≥ 2 → mehrere Vaults im selben Baum (entweder parallel oder verschachtelt).
   let count = 0
+  if (existsSync(join(parentPath, '.obsidian'))) count++
+
   let entries
   try { entries = readdirSync(parentPath, { withFileTypes: true }) }
-  catch { return false }
+  catch { return count >= 2 }
+
   for (const e of entries) {
-    if (!e.isDirectory()) continue
-    if (existsSync(join(parentPath, e.name, '.obsidian'))) {
+    if (!e.isDirectory() || e.name.startsWith('.')) continue
+    const subPath = join(parentPath, e.name)
+    if (existsSync(join(subPath, '.obsidian'))) {
       count++
       if (count >= 2) return true
     }
+    // Eine weitere Ebene tiefer scannen — fängt Fälle wie Vaults/A/Sub/.obsidian
+    let subEntries
+    try { subEntries = readdirSync(subPath, { withFileTypes: true }) }
+    catch { continue }
+    for (const sub of subEntries) {
+      if (!sub.isDirectory() || sub.name.startsWith('.')) continue
+      if (existsSync(join(subPath, sub.name, '.obsidian'))) {
+        count++
+        if (count >= 2) return true
+      }
+    }
   }
-  return false
+  return count >= 2
 }
 
 function getVault(ctx) {
