@@ -217,7 +217,7 @@ export function setupIPC(win, { getSettings, saveSettings, getTokens, saveTokens
     return { path: r.filePaths[0] }
   })
 
-  ipcMain.handle('validateVaultPath', (_e, path) => {
+  ipcMain.handle('lyra:validateVaultPath', (_e, path) => {
     if (!path) return { ok: true }
     if (!existsSync(path)) return { error: 'Pfad existiert nicht.' }
     try {

@@ -11,7 +11,7 @@ contextBridge.exposeInMainWorld('lyra', {
   hideWindow:      ()                 => ipcRenderer.send('lyra:window:hide'),
   transcribeAudio: (base64, mime)     => ipcRenderer.invoke('lyra:transcribe', { base64, mime }),
   pickFolder:      ()                 => ipcRenderer.invoke('lyra:pickFolder'),
-  validateVaultPath: (path)           => ipcRenderer.invoke('validateVaultPath', path),
+  validateVaultPath: (path)           => ipcRenderer.invoke('lyra:validateVaultPath', path),
   openExternal:    (url)              => ipcRenderer.send('lyra:open:external', url),
 
   // Aufgaben (geplante Prompts)
