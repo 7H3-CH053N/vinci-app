@@ -6,8 +6,11 @@ import { existsSync, statSync, readdirSync, readFileSync, writeFileSync, mkdirSy
 import { join, basename, relative } from 'path'
 import { homedir } from 'os'
 
+// Beide Mac-Waisen-Vaults haben unterschiedliche Layouts:
+// - Vaults/VINCI/        — Kategorien direkt im Root (Personen/, Firmen/, …)
+// - Vaults/VINCI Wissen/ — Kategorien unter nested VINCI/-Subdir
 const ORPHAN_VAULTS = [
-  '/Users/alexjanuschewsky/Vaults/VINCI/VINCI',
+  '/Users/alexjanuschewsky/Vaults/VINCI',
   '/Users/alexjanuschewsky/Vaults/VINCI Wissen/VINCI'
 ]
 const ORPHAN_ROOTS = [
