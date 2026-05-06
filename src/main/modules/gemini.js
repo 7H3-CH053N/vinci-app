@@ -336,9 +336,38 @@ export async function geminiChat({ message, history = [], apiKey, model, onToolC
       const looksBloggy = /\b(blog|posts?|artikel|digitalhandwerk)\b.*\b(sync|aktualisier|hol|lad|zieh|update|fetch|neue?)\b/i.test(message)
                         || /\b(sync|aktualisier|hol|lad|zieh|fetch)\b.*\b(blog|posts?|artikel|digitalhandwerk)\b/i.test(message)
                         || /^(sync\s+blog|blog\s+sync|blog\s+aktualisieren?|hol\s+(meine\s+)?(blog\s*)?(posts?|artikel))$/i.test(message.trim())
+      // Sicherheitsnetz 4: "Speichere das ins Vault" nach Web-Suche?
+      const looksSavey = /(speicher|notier|merk\s+dir|kopier|leg.*notiz|in\s+(das\s+)?vault|in\s+obsidian)/i.test(message)
       let fallbackTool = null
       let fallbackParams = {}
-      if (looksBloggy && onToolCall) {
+      if (looksSavey && onToolCall) {
+        // Aus contents den letzten Assistant-Text fischen (history kommt persisted aus DB,
+        // enthält nur 'user'/'assistant'/'model'-Roles als Text — keine strukturierten functionResponses).
+        let lastAssistantText = null
+        for (let i = contents.length - 1; i >= 0; i--) {
+          const c = contents[i]
+          if (c.role === 'model' || c.role === 'assistant') {
+            const t = (c.parts || []).map(p => p.text || '').join('').trim()
+            if (t) { lastAssistantText = t; break }
+          }
+        }
+        if (lastAssistantText) {
+          // URLs aus dem letzten Assistant-Text extrahieren (Gemini schreibt Quellen in die Antwort)
+          const urlRe = /https?:\/\/[^\s\)\]]+/g
+          const sources = [...new Set((lastAssistantText.match(urlRe) || []))].slice(0, 3)
+          if (sources.length > 0) {
+            const firstSentence = lastAssistantText.split(/[.!?\n]/)[0].slice(0, 80).trim() || 'Web-Recherche'
+            fallbackTool = 'web_saveToVault'
+            fallbackParams = {
+              title: firstSentence,
+              summary: lastAssistantText.slice(0, 2000),
+              sources
+            }
+          } else {
+            console.warn('[GEMINI] Save fallback: keine URLs im letzten Assistant-Text gefunden')
+          }
+        }
+      } else if (looksBloggy && onToolCall) {
         fallbackTool = 'blog_sync'
         fallbackParams = {}
       } else if ((looksWebbish || hasOpenAIish) && onToolCall) {
