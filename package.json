@@ -26,6 +26,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.0",
+    "axios-mock-adapter": "^2.1.0",
     "electron": "^31.0.0",
     "electron-builder": "^25.0.0",
     "electron-vite": "^2.3.0",
