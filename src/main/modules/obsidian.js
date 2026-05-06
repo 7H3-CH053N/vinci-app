@@ -151,6 +151,25 @@ export const obsidianModule = {
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
+export function detectMultipleVaults(parentPath) {
+  if (!existsSync(parentPath)) return false
+  try {
+    if (!statSync(parentPath).isDirectory()) return false
+  } catch { return false }
+  let count = 0
+  let entries
+  try { entries = readdirSync(parentPath, { withFileTypes: true }) }
+  catch { return false }
+  for (const e of entries) {
+    if (!e.isDirectory()) continue
+    if (existsSync(join(parentPath, e.name, '.obsidian'))) {
+      count++
+      if (count >= 2) return true
+    }
+  }
+  return false
+}
+
 function getVault(ctx) {
   const vault = ctx?.settings?.obsidian?.vaultPath
   if (!vault) {
@@ -161,6 +180,9 @@ function getVault(ctx) {
   }
   if (!statSync(vault).isDirectory()) {
     return { error: `Vault-Pfad ist kein Ordner: ${vault}` }
+  }
+  if (detectMultipleVaults(vault)) {
+    return { error: `Pfad enthält mehrere Vaults — bitte den konkreten Vault auswählen, nicht den Parent-Ordner: ${vault}` }
   }
   return { ok: true, root: resolve(vault) }
 }
