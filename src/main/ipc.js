@@ -1,5 +1,7 @@
 import { ipcMain, dialog } from 'electron'
+import { existsSync, statSync } from 'fs'
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import { detectMultipleVaults } from './modules/obsidian.js'
 import {
   listTasks, createTask, updateTask, deleteTask,
   executeTaskNow, getTaskResults, describeSchedule
@@ -213,6 +215,20 @@ export function setupIPC(win, { getSettings, saveSettings, getTokens, saveTokens
     })
     if (r.canceled || !r.filePaths?.length) return { canceled: true }
     return { path: r.filePaths[0] }
+  })
+
+  ipcMain.handle('validateVaultPath', (_e, path) => {
+    if (!path) return { ok: true }
+    if (!existsSync(path)) return { error: 'Pfad existiert nicht.' }
+    try {
+      if (!statSync(path).isDirectory()) return { error: 'Pfad ist kein Ordner.' }
+    } catch (e) {
+      return { error: `Pfad nicht lesbar: ${e.message}` }
+    }
+    if (detectMultipleVaults(path)) {
+      return { error: 'Pfad enthält mehrere Vaults — bitte den konkreten Vault auswählen, nicht den Parent-Ordner.' }
+    }
+    return { ok: true }
   })
 
   // ── Aufgaben (geplante Prompts) ───────────────────────────────────────────

@@ -19,6 +19,7 @@ export default function Settings({ onClose }) {
   const [saved, setSaved] = useState(false)
   const [edgeStatus, setEdgeStatus] = useState(null)
   const [edgeBusy,   setEdgeBusy]   = useState(false)
+  const [vaultError, setVaultError] = useState('')
 
   useEffect(() => {
     window.lyra.getSettings().then(s => {
@@ -27,6 +28,16 @@ export default function Settings({ onClose }) {
     })
     window.lyra.edgeTTSStatus?.().then(setEdgeStatus).catch(() => {})
   }, [])
+
+  useEffect(() => {
+    const path = local?.obsidian?.vaultPath
+    if (!path) { setVaultError(''); return }
+    let active = true
+    window.lyra?.validateVaultPath?.(path).then(r => {
+      if (active) setVaultError(r?.error || '')
+    })
+    return () => { active = false }
+  }, [local?.obsidian?.vaultPath])
 
   async function refreshEdgeStatus() {
     const s = await window.lyra.edgeTTSStatus()
@@ -493,6 +504,11 @@ export default function Settings({ onClose }) {
                 if (r && !r.canceled && r.path) update('obsidian.vaultPath', r.path)
               }}>📁 Wählen</button>
             </div>
+            {vaultError && (
+              <p className="hint" style={{ color: '#ff6b6b', marginTop: '4px' }}>
+                ⚠️ {vaultError}
+              </p>
+            )}
             <p className="hint">Leerlassen, um Obsidian zu deaktivieren. VINCI durchsucht alle .md-Dateien im Ordner und kann neue Notizen in <code>inbox/</code> anlegen (überschreibt nie bestehende).</p>
           </div>
         </>}
