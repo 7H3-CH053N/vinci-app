@@ -83,9 +83,26 @@ export function scanVaultLocal(vaultPath) {
   return { scanned: entries.length, proposals }
 }
 
-// Implemented in Task 5.3
-export function savePlan(plan) { throw new Error('not implemented') }
-export function loadLatestPlan() { throw new Error('not implemented') }
+function planFilePath() {
+  const stamp = new Date().toISOString().slice(0, 10)
+  const dir = join(homedir(), 'Library', 'Application Support', 'vinci')
+  mkdirSync(dir, { recursive: true })
+  return join(dir, `cleanup-plan-${stamp}.json`)
+}
+
+export function savePlan(plan) {
+  const path = planFilePath()
+  writeFileSync(path, JSON.stringify(plan, null, 2), 'utf8')
+  return path
+}
+
+export function loadLatestPlan() {
+  const dir = join(homedir(), 'Library', 'Application Support', 'vinci')
+  if (!existsSync(dir)) return null
+  const files = readdirSync(dir).filter(f => f.startsWith('cleanup-plan-') && f.endsWith('.json')).sort()
+  if (!files.length) return null
+  return JSON.parse(readFileSync(join(dir, files[files.length - 1]), 'utf8'))
+}
 
 // Implemented in Task 5.4
 export async function applyPlanLocal(vaultPath, plan) {
