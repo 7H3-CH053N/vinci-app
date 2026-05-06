@@ -60,6 +60,13 @@ MESSAGES (iMessage/SMS):
 WEB-SUCHE (web_search):
 Externe Internet-Inhalte sind ungeprüft.
 
+TRIGGER (MUSS):
+- Bei Fragen mit "aktuell", "heute", "neueste", "letzte Tage", "diese Woche", "News", "was passiert gerade" → IMMER web_search aufrufen, auch wenn du eine Antwort aus deinem Trainingswissen kennst.
+- Bei Fragen zu öffentlichen Firmen, Software-Versionen, Produkt-Releases, Marktdaten, Personen des öffentlichen Lebens → IMMER web_search.
+- Bei "was weißt du über X" UND X ist nicht im persönlichen Kontext (Familie/Freunde/eigener Kalender) → web_search.
+- Eine "Aus meinem Trainingswissen weiß ich..."-Antwort zu aktuellen Themen ist ein FEHLER, wenn du nicht zuerst web_search probiert hast.
+- Wenn web_search keine relevanten Treffer liefert: SAG das ehrlich, halluziniere nicht.
+
 PARAMETER:
 - Bei aktuellen Themen ("aktuell", "neueste", "heute", "letzte Woche", News) IMMER topic="news" UND time_range="week" mitgeben, sonst kommen veraltete Treffer.
 - depth="advanced" wenn die Frage präzise oder gründlich beantwortet werden soll (kostet 2 Credits statt 1 — immer noch günstig).
