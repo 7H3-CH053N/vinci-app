@@ -311,10 +311,34 @@ export async function geminiChat({ message, history = [], apiKey, model, onToolC
 
     const text = response.text?.() || ''
     if (!text.trim()) {
-      // Modell hat nichts gesagt — kurz nachfragen
-      console.warn('[GEMINI] Empty response, asking for summary retry')
+      // Bekannter Gemini-2.5-Flash-Quirk: finishReason STOP mit 0 parts — Thinking-Tokens
+      // verbraucht, kein Output mehr übrig. Wir helfen nach.
+      const cand = response.candidates?.[0]
+      console.warn('[GEMINI] Empty response. finishReason:', cand?.finishReason, '| parts:', JSON.stringify(cand?.content?.parts || []))
+
+      // Sicherheitsnetz: Sieht die User-Frage nach Web-Search aus? Dann rufen wir
+      // web_search selbst auf und lassen Gemini nur noch synthetisieren.
+      const looksWebbish = /\b(aktuell|neueste|neue|neuer|neues|neuigkeit|heute|kürzlich|gerade|momentan|derzeit|news|nachrichten|kurs|preis|aktie)\b/i.test(message)
+      const hasOpenAIish = /\b(openai|anthropic|google|microsoft|apple|tesla|nvidia|meta|facebook|x\.com|twitter)\b/i.test(message)
+      if ((looksWebbish || hasOpenAIish) && onToolCall) {
+        console.warn('[GEMINI] Falling back to direct web_search call')
+        try {
+          const searchResult = await onToolCall('web_search', { query: message, count: 5, topic: 'news', time_range: 'week' })
+          contents.push({
+            role: 'user',
+            parts: [{ functionResponse: { name: 'web_search', response: { result: searchResult } } }]
+          })
+          const synth = await geminiModel.generateContent({ contents })
+          const synthText = synth.response.text?.() || ''
+          if (synthText.trim()) return synthText
+        } catch (err) {
+          console.warn('[GEMINI] Direct web_search fallback failed:', err.message)
+        }
+      }
+
+      // Letzter Versuch: kurze Nachfrage
       try {
-        contents.push({ role: 'user', parts: [{ text: 'Bitte beantworte die ursprüngliche Frage. Wenn du dafür web_search brauchst (aktuelle/öffentliche Themen), rufe es jetzt auf.' }] })
+        contents.push({ role: 'user', parts: [{ text: 'Bitte beantworte die ursprüngliche Frage.' }] })
         const retry = await geminiModel.generateContent({ contents })
         const retryText = retry.response.text?.() || ''
         if (retryText.trim()) return retryText
