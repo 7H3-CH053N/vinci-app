@@ -135,3 +135,31 @@ OpenAI body.`
     expect(r.content).toContain('[[OpenAI]]')
   })
 })
+
+import { appendBacklinkBullet } from '../_wikilinkEngine.js'
+
+const V2 = join(tmpdir(), 'vinci-bl-test')
+
+describe('appendBacklinkBullet', () => {
+  beforeEach(() => {
+    rmSync(V2, { recursive: true, force: true })
+    mkdirSync(join(V2, 'VINCI/Firmen'), { recursive: true })
+    writeFileSync(join(V2, 'VINCI/Firmen/OpenAI.md'), '---\n---\n# OpenAI\n\n')
+  })
+  afterEach(() => rmSync(V2, { recursive: true, force: true }))
+
+  it('appends backlink if not present', () => {
+    appendBacklinkBullet(V2, 'OpenAI', 'Firmen', '500-artikel')
+    const c = readFileSync(join(V2, 'VINCI/Firmen/OpenAI.md'), 'utf8')
+    expect(c).toContain('Erwähnt in [[500-artikel]]')
+  })
+  it('skips on duplicate (same slug)', () => {
+    appendBacklinkBullet(V2, 'OpenAI', 'Firmen', '500-artikel')
+    appendBacklinkBullet(V2, 'OpenAI', 'Firmen', '500-artikel')
+    const c = readFileSync(join(V2, 'VINCI/Firmen/OpenAI.md'), 'utf8')
+    expect((c.match(/Erwähnt in \[\[500-artikel\]\]/g) || []).length).toBe(1)
+  })
+  it('returns false if entity file does not exist', () => {
+    expect(appendBacklinkBullet(V2, 'Nonexistent', 'Firmen', 'slug')).toBe(false)
+  })
+})

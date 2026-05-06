@@ -111,3 +111,14 @@ export function processPostFile(content, inventory) {
     mentions: sortedCanon.map(m => `[[${m}]]`)
   }
 }
+
+export function appendBacklinkBullet(vaultPath, entityName, category, postSlug) {
+  const file = join(vaultPath, 'VINCI', category, `${entityName}.md`)
+  if (!existsSync(file)) return false
+  const content = readFileSync(file, 'utf8')
+  const bullet = `- Erwähnt in [[${postSlug}]]`
+  if (content.includes(bullet)) return false
+  const sep = content.endsWith('\n') ? '' : '\n'
+  writeFileSync(file, content + sep + bullet + '\n', 'utf8')
+  return true
+}
