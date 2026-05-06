@@ -38,7 +38,15 @@ Beispiel: "Welche Termine habe ich?" → direkt calendar_getUpcoming aufrufen mi
 Beispiel: "Wann ist Termin mit X?" → calendar_getUpcoming mit days:14 aufrufen und im Ergebnis suchen
 Beispiel: "Stromverbrauch?" → direkt strom_getCurrent aufrufen.
 Nutze bei Personennamen oder unklarem Zeitraum immer days:14 für die Kalenderabfrage.
-SYSTEM: Bei Fragen nach "CPU", "RAM", "Speicher", "Akku", "Festplatte", "Prozesse", "System", "wie läuft mein Mac" → system_getStatus aufrufen.
+SYSTEM: Bei Fragen nach "CPU", "RAM", "Speicher", "Akku", "Festplatte", "Prozesse", "System", "wie läuft mein Mac" → system_getStatus aufrufen. NIEMALS bei n8n/Workflow-Fragen — das ist eine andere Domain.
+
+N8N: Bei Fragen mit "n8n", "Workflow", "Automation", "wie läuft mein n8n", "n8n status", "welche workflows" → IMMER n8n_getStatus oder n8n_getWorkflows aufrufen — niemals system_getStatus, das ist der Mac-Status, nicht n8n!
+
+WETTER: Bei "Wetter", "wie wird das Wetter", "Temperatur", "Regen", "Sonne", Ortsnamen mit Wetterkontext → IMMER weather_getCurrent oder weather_getForecast aufrufen.
+
+MAIL: Bei "Mails", "ungelesene Mails", "neueste E-Mails", "Posteingang" → IMMER mail_getUnread oder mail_getLatest aufrufen.
+
+OBSIDIAN: Bei "was hab ich notiert", "such in meinen Notizen", "obsidian", "vault" → IMMER obsidian_search aufrufen.
 
 NEWS: Bei Fragen nach "Nachrichten", "News", "Neuigkeiten", "was gibt es Neues", "was ist passiert" → news_getNews aufrufen. Quellen gezielt wählen: bei Fußball/Salzburg nur salzburg_rbs, bei Tech nur futurezone, sonst alle.
 
@@ -330,8 +338,12 @@ export async function geminiChat({ message, history = [], apiKey, model, onToolC
       // web_search selbst auf und lassen Gemini nur noch synthetisieren.
       const looksWebbish = /\b(aktuell|neueste|neue|neuer|neues|neuigkeit|heute|kürzlich|gerade|momentan|derzeit|news|nachrichten|kurs|preis|aktie)\b/i.test(message)
       const hasOpenAIish = /\b(openai|anthropic|google|microsoft|apple|tesla|nvidia|meta|facebook|x\.com|twitter)\b/i.test(message)
-      // Sicherheitsnetz 2: Ist es eine System-Status-Frage?
-      const looksSystemy = /\b(mac|cpu|ram|arbeitsspeicher|festplatte|akku|prozessor|disk|system|läuft\s+mein)\b/i.test(message)
+      // Sicherheitsnetz 2: Ist es eine System-Status-Frage? (NICHT bei n8n!)
+      const looksN8ny    = /\b(n8n|workflow|automation)\b/i.test(message)
+      const looksSystemy = !looksN8ny && /\b(mac|cpu|ram|arbeitsspeicher|festplatte|akku|prozessor|disk|läuft\s+mein\s+mac)\b/i.test(message)
+      const looksWeathery = /\b(wetter|temperatur|regen|sonne|grad)\b/i.test(message)
+      const looksMaily   = /\b(mails?|e-?mails?|posteingang|ungelesene)\b/i.test(message)
+      const looksObsidiany = /\b(notiz|notizen|obsidian|vault|notiert)\b/i.test(message) && !/(speicher|in\s+das?\s+vault)/i.test(message)
       // Sicherheitsnetz 3: Ist es ein Blog-Sync-Befehl?
       const looksBloggy = /\b(blog|posts?|artikel|digitalhandwerk)\b.*\b(sync|aktualisier|hol|lad|zieh|update|fetch|neue?)\b/i.test(message)
                         || /\b(sync|aktualisier|hol|lad|zieh|fetch)\b.*\b(blog|posts?|artikel|digitalhandwerk)\b/i.test(message)
@@ -380,12 +392,24 @@ export async function geminiChat({ message, history = [], apiKey, model, onToolC
             console.warn('[GEMINI] Save fallback: keine Quellen verfügbar — kann nicht speichern')
           }
         }
+      } else if (looksN8ny && onToolCall) {
+        fallbackTool = 'n8n_getStatus'
+        fallbackParams = {}
       } else if (looksBloggy && onToolCall) {
         fallbackTool = 'blog_sync'
         fallbackParams = {}
       } else if ((looksWebbish || hasOpenAIish) && onToolCall) {
         fallbackTool = 'web_search'
         fallbackParams = { query: message, count: 5, topic: 'news', time_range: 'week' }
+      } else if (looksWeathery && onToolCall) {
+        fallbackTool = 'weather_getCurrent'
+        fallbackParams = {}
+      } else if (looksMaily && onToolCall) {
+        fallbackTool = 'mail_getUnread'
+        fallbackParams = {}
+      } else if (looksObsidiany && onToolCall) {
+        fallbackTool = 'obsidian_search'
+        fallbackParams = { query: message }
       } else if (looksSystemy && onToolCall) {
         fallbackTool = 'system_getStatus'
         fallbackParams = {}
