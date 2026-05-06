@@ -2,6 +2,7 @@ import { ipcMain, dialog } from 'electron'
 import { existsSync, statSync } from 'fs'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { detectMultipleVaults } from './modules/obsidian.js'
+import { planMigration, applyMigration } from './modules/_vaultMigration.js'
 import {
   listTasks, createTask, updateTask, deleteTask,
   executeTaskNow, getTaskResults, describeSchedule
@@ -215,6 +216,20 @@ export function setupIPC(win, { getSettings, saveSettings, getTokens, saveTokens
     })
     if (r.canceled || !r.filePaths?.length) return { canceled: true }
     return { path: r.filePaths[0] }
+  })
+
+  ipcMain.handle('lyra:migration:plan', async () => {
+    const settings = getSettings()
+    const vault = settings.obsidian?.vaultPath
+    if (!vault) return { error: 'Vault-Pfad nicht gesetzt.' }
+    return await planMigration(vault)
+  })
+
+  ipcMain.handle('lyra:migration:apply', async (_e, plan, opts = { dryRun: true }) => {
+    const settings = getSettings()
+    const vault = settings.obsidian?.vaultPath
+    if (!vault) return { error: 'Vault-Pfad nicht gesetzt.' }
+    return await applyMigration(vault, plan, opts)
   })
 
   ipcMain.handle('lyra:validateVaultPath', (_e, path) => {

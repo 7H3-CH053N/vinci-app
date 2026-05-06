@@ -20,6 +20,33 @@ export default function Settings({ onClose }) {
   const [edgeStatus, setEdgeStatus] = useState(null)
   const [edgeBusy,   setEdgeBusy]   = useState(false)
   const [vaultError, setVaultError] = useState('')
+  const [migPlan, setMigPlan]     = useState(null)
+  const [migReport, setMigReport] = useState(null)
+  const [migBusy, setMigBusy]     = useState(false)
+
+  async function runMigPlan() {
+    setMigBusy(true)
+    try {
+      const r = await window.lyra.migrationPlan()
+      setMigPlan(r)
+      setMigReport(null)
+    } finally { setMigBusy(false) }
+  }
+  async function runMigDry() {
+    setMigBusy(true)
+    try {
+      const r = await window.lyra.migrationApply(migPlan, { dryRun: true })
+      setMigReport({ ...r, _dry: true })
+    } finally { setMigBusy(false) }
+  }
+  async function runMigApply() {
+    if (!confirm('Echter Lauf — Backup wird unter ~/.vinci-archive/ erstellt, alte Vaults werden archiviert. Sicher?')) return
+    setMigBusy(true)
+    try {
+      const r = await window.lyra.migrationApply(migPlan, { dryRun: false })
+      setMigReport({ ...r, _dry: false })
+    } finally { setMigBusy(false) }
+  }
 
   useEffect(() => {
     window.lyra.getSettings().then(s => {
@@ -510,6 +537,33 @@ export default function Settings({ onClose }) {
               </p>
             )}
             <p className="hint">Leerlassen, um Obsidian zu deaktivieren. VINCI durchsucht alle .md-Dateien im Ordner und kann neue Notizen in <code>inbox/</code> anlegen (überschreibt nie bestehende).</p>
+          </div>
+
+          {/* Mac-Vault-Migration ─────────────────────────────────────── */}
+          <div className="field" style={{ borderTop: '1px solid var(--border)', paddingTop: 16, marginTop: 8 }}>
+            <label style={{ fontSize: 13, fontWeight: 600 }}>Mac-Vault-Migration</label>
+            <p className="hint">
+              Einmalig: Daten aus den alten Mac-Vaults <code>/Users/.../Vaults/VINCI</code> und
+              {' '}<code>/Users/.../Vaults/VINCI Wissen</code> in den kanonischen Vault zusammenführen.
+              Schritte: 1) Plan erstellen, 2) Dry-Run, 3) Anwenden.
+            </p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+              <button className="btn-secondary" disabled={migBusy} onClick={runMigPlan}>1. Migration planen</button>
+              <button className="btn-secondary" disabled={migBusy || !migPlan} onClick={runMigDry}>2. Dry-Run</button>
+              <button className="btn-secondary" disabled={migBusy || !migPlan} onClick={runMigApply}>3. Echt anwenden (mit Backup)</button>
+            </div>
+            {migPlan && (
+              <details style={{ marginTop: 12 }}>
+                <summary>Plan: {migPlan.scanned ?? 0} Notes gescannt, {migPlan.proposals?.length ?? 0} Vorschläge</summary>
+                <pre style={{ fontSize: '0.8em', maxHeight: 300, overflow: 'auto' }}>{JSON.stringify(migPlan, null, 2)}</pre>
+              </details>
+            )}
+            {migReport && (
+              <div style={{ marginTop: 12, padding: 8, background: 'rgba(0,200,100,0.1)', borderRadius: 4 }}>
+                <strong>{migReport._dry ? 'Dry-Run Report' : 'Echt-Lauf Report'}:</strong>
+                <pre style={{ fontSize: '0.8em' }}>{JSON.stringify(migReport, null, 2)}</pre>
+              </div>
+            )}
           </div>
         </>}
 
