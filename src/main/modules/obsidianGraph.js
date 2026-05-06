@@ -19,11 +19,12 @@
 import axios from 'axios'
 import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync, readdirSync } from 'fs'
 import { join } from 'path'
+import { VALID_CATS, isDomain } from './_graphCategories.js'
+import { autoMergeAlias } from './_aliasBuilder.js'
 
 const OLLAMA_URL  = 'http://localhost:11434'
 const GRAPH_DIR   = 'VINCI'
 const ALIAS_FILE  = '_aliases.json'
-const VALID_CATS  = ['Personen', 'Tiere', 'Firmen', 'Orte', 'Themen', 'Projekte']
 
 // Token-Overlap-Schwelle für Dedup (0.7 = wenn 70% der Wörter eines neuen Facts schon
 // in der Notiz vorkommen, gilt es als Duplikat)
@@ -221,6 +222,32 @@ Jetzt extrahiere aus:
   return []
 }
 
+// ── Hard-Reject + Force-Category ──────────────────────────────────────────────
+const HARD_REJECT = [
+  /^[\d\s\-\+\(\)\.\/]+$/,
+  /^\+\d{8,15}$/,
+  /^[\w.+-]+@[\w-]+\.[\w.-]+$/,
+  /^\d{1,2}\.\s*(jänner|januar|februar|märz|april|mai|juni|juli|august|september|oktober|november|dezember)/i,
+  /^\d{1,2}\.\d{1,2}\.\d{2,4}$/,
+  /^\d{4}$/,
+  /^(cpu|ram|gpu|disk|festplatte|akku|prozessor|arbeitsspeicher)$/i,
+  /^(plus|pro|enterprise|free|basic|premium|standard|advanced)$/i,
+  /^(gpt[-\s]?\d|claude[-\s]?\d|gemini[-\s]?\d)/i,
+  /^.{1,2}$/,
+  /^.{81,}$/
+]
+
+export function isHardRejected(name) {
+  const t = String(name || '').trim()
+  for (const re of HARD_REJECT) if (re.test(t)) return true
+  return false
+}
+
+export function forceCategoryFor(name, suggestedCategory) {
+  if (isDomain(name)) return 'Quellen'
+  return suggestedCategory
+}
+
 // ── Post-Filter ───────────────────────────────────────────────────────────────
 const GENERIC_WORDS = new Set([
   // Familienverhältnisse
@@ -250,6 +277,7 @@ function postFilter(raw, fact) {
   for (const e of raw) {
     if (!e || typeof e.name !== 'string' || typeof e.category !== 'string') continue
     let name = e.name.trim().replace(/^["']|["']$/g, '')
+    if (isHardRejected(name)) continue
     if (name.length < 2) continue
     if (GENERIC_WORDS.has(name.toLowerCase())) continue
     if (/^\d{1,2}\.\d{1,2}\.\d{2,4}$/.test(name)) continue   // Datum
@@ -258,6 +286,7 @@ function postFilter(raw, fact) {
 
     let category = e.category
     if (!VALID_CATS.includes(category)) category = 'Themen'
+    category = forceCategoryFor(name, category)
 
     const key = name.toLowerCase()
     if (seen.has(key)) continue
@@ -345,6 +374,11 @@ created: ${new Date().toISOString().split('T')[0]}
   content += newLine + '\n'
 
   writeFileSync(file, content, 'utf8')
+
+  // After write: if this is a multi-word person/firma name, try to merge any matching first-name file
+  if (entity.name.includes(' ')) {
+    try { autoMergeAlias(vault, entity.name) } catch (err) { console.warn('[Graph] autoMergeAlias failed:', err.message) }
+  }
 }
 
 function findExistingNote(vault, name) {
