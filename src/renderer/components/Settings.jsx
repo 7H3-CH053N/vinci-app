@@ -145,11 +145,11 @@ export default function Settings({ onClose }) {
         cursor = cursor[parts[i]]
       }
       cursor[parts[parts.length - 1]] = value
-      // Live font preview
+      // Live font preview — base 15px must match App.jsx initial load
       if (path.startsWith('ui.')) {
         const ui = next.ui || {}
         document.documentElement.style.setProperty('--sans', `'${ui.fontFamily || 'Inter Tight'}', system-ui, sans-serif`)
-        document.documentElement.style.setProperty('--fs', `${Math.round((ui.fontScale || 1.0) * 13)}px`)
+        document.documentElement.style.setProperty('--fs', `${Math.round((ui.fontScale || 1.0) * 15)}px`)
       }
       return next
     })
@@ -736,7 +736,7 @@ export default function Settings({ onClose }) {
             </div>
           </div>
           <div className="field">
-            <label>Schriftgröße: {Math.round((local.ui?.fontScale || 1) * 13)}px</label>
+            <label>Schriftgröße: {Math.round((local.ui?.fontScale || 1) * 15)}px</label>
             <input type="range" min="0.85" max="1.4" step="0.05" className="range"
               value={local.ui?.fontScale || 1}
               onChange={e => update('ui.fontScale', parseFloat(e.target.value))} />

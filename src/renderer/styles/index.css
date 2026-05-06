@@ -315,7 +315,7 @@ html, body, #root {
   padding: 14px 18px; border-bottom: 1px solid var(--border); flex-shrink: 0;
   background: linear-gradient(180deg, var(--gold-rim) 0%, transparent 100%);
 }
-.settings-title { font-size: 10px; font-weight: 600; letter-spacing: .3em; color: var(--gold); }
+.settings-title { font-size: calc(var(--fs) * 0.7); font-weight: 600; letter-spacing: .3em; color: var(--gold); }
 .close-btn {
   background: transparent; border: none; color: var(--text-dim);
   cursor: pointer; font-size: 13px; padding: 4px; border-radius: 4px; transition: color .15s;
@@ -329,7 +329,7 @@ html, body, #root {
 .settings-tab {
   background: transparent; border: none;
   border-bottom: 2px solid transparent; color: var(--text-dim);
-  padding: 10px 14px; font-size: 12px; font-family: var(--sans); font-weight: 500;
+  padding: 10px 14px; font-size: calc(var(--fs) * 0.85); font-family: var(--sans); font-weight: 500;
   cursor: pointer; transition: all .15s; margin-bottom: -1px; letter-spacing: 0.03em;
 }
 .settings-tab:hover  { color: var(--text-mid); }
@@ -345,29 +345,29 @@ html, body, #root {
 .field:last-child { border-bottom: none; padding-bottom: 0; }
 .field.row { flex-direction: row; align-items: center; justify-content: space-between; }
 .field.row label { margin: 0; }
-.field label { font-size: 11px; font-weight: 500; color: var(--text-dim); letter-spacing: .04em; }
+.field label { font-size: calc(var(--fs) * 0.78); font-weight: 500; color: var(--text-dim); letter-spacing: .04em; }
 
 .inp {
   background: var(--surface-mid); border: 1px solid var(--border); border-radius: var(--r-sm);
-  color: var(--text); font-family: var(--sans); font-size: 13px;
+  color: var(--text); font-family: var(--sans); font-size: calc(var(--fs) * 0.92);
   padding: 8px 11px; outline: none; width: 100%; transition: border-color .15s;
 }
 .inp:focus { border-color: var(--border-gold); }
 
 .range { width: 100%; accent-color: var(--gold); cursor: pointer; }
 .time-inp { width: auto; }
-.hint { font-size: 10px; color: var(--text-dim); line-height: 1.55; }
+.hint { font-size: calc(var(--fs) * 0.72); color: var(--text-dim); line-height: 1.55; }
 
 .font-preview {
   padding: 9px 11px; background: var(--surface-mid);
   border: 1px solid var(--border); border-radius: var(--r-sm);
-  color: var(--text-mid); font-size: 13px;
+  color: var(--text-mid); font-size: calc(var(--fs) * 0.92);
 }
 
 .radio-group { display: flex; flex-direction: column; gap: 6px; }
 .radio-label {
   display: flex; align-items: center; gap: 10px; cursor: pointer;
-  font-size: 13px; color: var(--text);
+  font-size: calc(var(--fs) * 0.92); color: var(--text);
   padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--r-sm);
   transition: all .15s;
 }
@@ -384,7 +384,7 @@ html, body, #root {
 .btn-primary {
   flex: 1; padding: 9px 16px; background: var(--gold-muted);
   border: 1px solid var(--border-gold); border-radius: var(--r-sm);
-  color: var(--gold); font-family: var(--sans); font-size: 12px; font-weight: 600;
+  color: var(--gold); font-family: var(--sans); font-size: calc(var(--fs) * 0.85); font-weight: 600;
   letter-spacing: .05em; cursor: pointer; transition: all .15s;
 }
 .btn-primary:hover { background: rgba(212,175,55,.2); border-color: var(--gold); }
@@ -392,14 +392,14 @@ html, body, #root {
 .btn-ghost {
   padding: 9px 16px; background: transparent;
   border: 1px solid var(--border); border-radius: var(--r-sm);
-  color: var(--text-dim); font-size: 12px; cursor: pointer; transition: all .15s;
+  color: var(--text-dim); font-size: calc(var(--fs) * 0.85); cursor: pointer; transition: all .15s;
 }
 .btn-ghost:hover { color: var(--text); border-color: rgba(255,255,255,.15); }
 
 .btn-secondary {
   padding: 7px 12px; background: transparent;
   border: 1px solid var(--border); border-radius: var(--r-sm);
-  color: var(--text-dim); font-size: 12px; cursor: pointer; transition: all .15s;
+  color: var(--text-dim); font-size: calc(var(--fs) * 0.85); cursor: pointer; transition: all .15s;
   align-self: flex-start;
 }
 .btn-secondary:hover { border-color: var(--border-gold); color: var(--gold); }
@@ -444,13 +444,27 @@ html, body, #root {
 .about-title-block { text-align: center; margin-bottom: 20px; }
 
 .about-name {
-  font-size: 28px; font-weight: 300; letter-spacing: 0.35em;
+  font-size: calc(var(--fs) * 1.85); font-weight: 300; letter-spacing: 0.35em;
   color: var(--gold); margin: 0 0 6px;
 }
 
 .about-subtitle {
-  font-size: 12px; color: var(--text-dim);
+  font-size: calc(var(--fs) * 0.85); color: var(--text-dim);
   letter-spacing: 0.15em; font-weight: 400;
+}
+
+.about-features { text-align: center; margin-bottom: 16px; max-width: 320px; }
+.about-features-headline {
+  font-size: calc(var(--fs) * 0.72); font-weight: 600; letter-spacing: 0.2em;
+  color: var(--gold); margin: 0 0 8px; text-transform: uppercase;
+}
+.about-features-list {
+  list-style: none; padding: 0; margin: 0;
+  font-size: calc(var(--fs) * 0.85); color: var(--text-mid);
+  line-height: 1.7;
+}
+.about-features-list li::before {
+  content: '·'; color: var(--gold); margin-right: 6px; font-weight: 600;
 }
 
 .about-divider {
@@ -462,7 +476,7 @@ html, body, #root {
 .about-credits { text-align: center; }
 
 .about-copy {
-  font-size: 13px; color: var(--text-mid);
+  font-size: calc(var(--fs) * 0.92); color: var(--text-mid);
   line-height: 1.8; margin: 0;
 }
 
@@ -475,7 +489,7 @@ html, body, #root {
 
 .about-version {
   margin-top: 24px;
-  font-size: 10px; color: var(--text-muted);
+  font-size: calc(var(--fs) * 0.7); color: var(--text-muted);
   letter-spacing: 0.15em;
 }
 
