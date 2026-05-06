@@ -4,6 +4,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 import { detectMultipleVaults } from './modules/obsidian.js'
 import { planMigration, applyMigration } from './modules/_vaultMigration.js'
 import { scanVaultLocal, savePlan, applyPlan } from './modules/graphCleaner.js'
+import { runOnce as blogRunOnce } from './modules/blogImporter.js'
 import {
   listTasks, createTask, updateTask, deleteTask,
   executeTaskNow, getTaskResults, describeSchedule
@@ -252,6 +253,14 @@ export function setupIPC(win, { getSettings, saveSettings, getTokens, saveTokens
     const vault = settings.obsidian?.vaultPath
     if (!vault) return { error: 'Vault-Pfad nicht gesetzt.' }
     return await applyPlan(vault, plan, opts)
+  })
+
+  ipcMain.handle('lyra:blog:sync', async (_e, opts = { force: false }) => {
+    const settings = getSettings()
+    const source = (settings.blogSources || []).find(s => s.enabled)
+    if (!source) return { error: 'Keine Blog-Source konfiguriert.' }
+    if (!settings.obsidian?.vaultPath) return { error: 'Kein Vault gesetzt.' }
+    return await blogRunOnce(source, settings.obsidian.vaultPath, opts)
   })
 
   ipcMain.handle('lyra:validateVaultPath', (_e, path) => {

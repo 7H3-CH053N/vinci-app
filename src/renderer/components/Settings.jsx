@@ -26,6 +26,8 @@ export default function Settings({ onClose }) {
   const [cleanPlan, setCleanPlan]     = useState(null)
   const [cleanReport, setCleanReport] = useState(null)
   const [cleanBusy, setCleanBusy]     = useState(false)
+  const [blogResult, setBlogResult]   = useState(null)
+  const [blogBusy, setBlogBusy]       = useState(false)
 
   async function runMigPlan() {
     setMigBusy(true)
@@ -87,6 +89,13 @@ export default function Settings({ onClose }) {
       const r = await window.lyra.cleanerApply(cleanPlan, { dryRun: false })
       setCleanReport({ ...r, _dry: false })
     } finally { setCleanBusy(false) }
+  }
+
+  async function runBlogSync(force = false) {
+    setBlogBusy(true)
+    try {
+      setBlogResult(await window.lyra.blogSync({ force }))
+    } finally { setBlogBusy(false) }
   }
 
   useEffect(() => {
@@ -666,6 +675,24 @@ export default function Settings({ onClose }) {
               <div style={{ marginTop: 12, padding: 8, background: cleanReport.errors?.length ? 'rgba(255,80,80,0.1)' : 'rgba(0,200,100,0.1)', borderRadius: 4 }}>
                 <strong>{cleanReport._dry ? 'Dry-Run Report' : 'Echt-Lauf Report'}:</strong>
                 <pre style={{ fontSize: '0.8em' }}>{JSON.stringify(cleanReport, null, 2)}</pre>
+              </div>
+            )}
+          </div>
+
+          {/* Blog-Sync (digitalhandwerk) ─────────────────────────────────── */}
+          <div className="field" style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border, #333)' }}>
+            <h3>Blog-Sync (digitalhandwerk)</h3>
+            <p className="hint">
+              Holt neue Posts von <code>digitalhandwerk.rocks</code> via WordPress-REST in den
+              Vault unter <code>RSS/digitalhandwerk/</code>. Idempotent (überspringt vorhandene Posts).
+            </p>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <button disabled={blogBusy} onClick={() => runBlogSync(false)}>Jetzt holen (nur neue)</button>
+              <button disabled={blogBusy} onClick={() => runBlogSync(true)}>Alle neu holen (force)</button>
+            </div>
+            {blogResult && (
+              <div style={{ marginTop: '12px', padding: '8px', background: blogResult.error ? 'rgba(255,80,80,0.1)' : 'rgba(0,200,100,0.1)', borderRadius: '4px' }}>
+                <pre style={{ fontSize: '0.8em' }}>{JSON.stringify(blogResult, null, 2)}</pre>
               </div>
             )}
           </div>

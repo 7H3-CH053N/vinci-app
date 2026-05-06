@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('lyra', {
   migrationApply:  (plan, opts)       => ipcRenderer.invoke('lyra:migration:apply', plan, opts),
   cleanerScan:     ()                 => ipcRenderer.invoke('lyra:cleaner:scan'),
   cleanerApply:    (plan, opts)       => ipcRenderer.invoke('lyra:cleaner:apply', plan, opts),
+  blogSync:        (opts)             => ipcRenderer.invoke('lyra:blog:sync', opts),
   openExternal:    (url)              => ipcRenderer.send('lyra:open:external', url),
 
   // Aufgaben (geplante Prompts)

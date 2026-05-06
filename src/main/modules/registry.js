@@ -12,6 +12,7 @@ import { contactsModule }  from './contacts.js'
 import { webModule }       from './web.js'
 import { messagesModule }  from './messages.js'
 import { homeassistantModule } from './homeassistant.js'
+import { blogImporterModule } from './blogImporter.js'
 import { getOllamaStatus } from './ollama.js'
 
 // Inline ollama status module (not in MODULES array - registered separately)
@@ -38,7 +39,8 @@ const MODULES = [
   contactsModule,
   webModule,
   messagesModule,
-  homeassistantModule
+  homeassistantModule,
+  blogImporterModule
 ]
 
 class ModuleRegistry {
