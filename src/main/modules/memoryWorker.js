@@ -15,6 +15,12 @@ import { getRecentHistory, getAllFacts, saveFact } from './memory.js'
 const OLLAMA_URL    = 'http://localhost:11434'
 const DEFAULT_MODEL = 'qwen2.5:3b'
 
+const SYSTEM_NOISE = /\b(cpu|ram|arbeitsspeicher|festplatte|akku|disk)\b.*\b\d+\s*(%|prozent|gb|mb)/i
+
+export function stripSystemNoise(text) {
+  return text.split('\n').filter(l => !SYSTEM_NOISE.test(l)).join('\n')
+}
+
 // Debounce: erst 30s nach letztem Trigger ausführen
 const DEBOUNCE_MS = 30_000
 // Cooldown: zwischen zwei Runs mindestens 2 Minuten
@@ -71,10 +77,12 @@ async function runConsolidation() {
       return
     }
 
-    const conv = history
-      .filter(m => m.content?.trim())
-      .map(m => `${m.role === 'user' ? 'Alex' : 'VINCI'}: ${m.content.trim()}`)
-      .join('\n')
+    const conv = stripSystemNoise(
+      history
+        .filter(m => m.content?.trim())
+        .map(m => `${m.role === 'user' ? 'Alex' : 'VINCI'}: ${m.content.trim()}`)
+        .join('\n')
+    )
 
     // 3) Existierende Facts mitschicken (für Deduplikation)
     const existing = getAllFacts(50).map(f => f.content)
@@ -211,6 +219,9 @@ const BAD_WORDS = [
   /\b(restlaufzeit|ladestand|battery\s+life)\b/i,
   // Mengen-Hinweise auf Listen aus Tool-Outputs (sowohl Ziffern als auch Wortzahlen)
   /\b(\d+|eine?|ein|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|elf|zwölf)\s+(?:\w+\s+){0,3}(termine?|mails?|e-?mails?|nachrichten|aufgaben|erinnerungen|tasks|to-?dos?)\b/i,
+
+  // ── System-/App-Aktionen (Kontakte gespeichert, etc.) ────────────────────
+  /\b(kontaktname|kontakt\s+gespeichert|kontaktnamen)\b/i,
 
   // ── Einmalige Ereignisse ─────────────────────────────────────────────────
   /\b(arzt|tierarzt|zahnarzt|doktor|friseur|krankenhaus)\b/i,
