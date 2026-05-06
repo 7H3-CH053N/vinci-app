@@ -75,7 +75,18 @@ const DEFAULT_SETTINGS = {
     lanUrl:    '',  // z. B. http://192.168.68.71:8123
     remoteUrl: '',  // z. B. http://homeassistant.tailfa2820.ts.net:8123
     token:     ''   // Lang-laufendes Zugangstoken aus dem HA-Profil
-  }
+  },
+  blogSources: [
+    {
+      id: 'digitalhandwerk',
+      type: 'wordpress',
+      baseUrl: 'https://digitalhandwerk.rocks',
+      vaultFolder: 'RSS/digitalhandwerk',
+      authorWikilink: '[[Alex Januschewsky]]',
+      cacheImages: false,
+      enabled: true
+    }
+  ]
 }
 
 export function getSettings() {
