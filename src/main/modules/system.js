@@ -103,8 +103,16 @@ async function getMemory() {
 }
 
 // ── Disk ──────────────────────────────────────────────────────────────────────
+// Auf APFS-Macs liegen die User-Daten unter /System/Volumes/Data, nicht /. Wenn vorhanden,
+// das nutzen — sonst Fallback auf /.
 async function getDisk() {
-  const { stdout } = await execAsync(`df -H / | tail -1`, { timeout: 5000 })
+  let target = '/System/Volumes/Data'
+  try {
+    await execAsync(`test -d ${target}`, { timeout: 1000 })
+  } catch {
+    target = '/'
+  }
+  const { stdout } = await execAsync(`df -H ${target} | tail -1`, { timeout: 5000 })
   const parts = stdout.trim().split(/\s+/)
   return {
     festplatte_gesamt:  parts[1],

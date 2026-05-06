@@ -348,8 +348,10 @@ export async function geminiChat({ message, history = [], apiKey, model, onToolC
       const looksBloggy = /\b(blog|posts?|artikel|digitalhandwerk)\b.*\b(sync|aktualisier|hol|lad|zieh|update|fetch|neue?)\b/i.test(message)
                         || /\b(sync|aktualisier|hol|lad|zieh|fetch)\b.*\b(blog|posts?|artikel|digitalhandwerk)\b/i.test(message)
                         || /^(sync\s+blog|blog\s+sync|blog\s+aktualisieren?|hol\s+(meine\s+)?(blog\s*)?(posts?|artikel))$/i.test(message.trim())
-      // Sicherheitsnetz 4: "Speichere das ins Vault" nach Web-Suche?
-      const looksSavey = /(speicher|notier|merk\s+dir|kopier|leg.*notiz|in\s+(das\s+)?vault|in\s+obsidian)/i.test(message)
+      // Sicherheitsnetz 4: "Speichere das ins Vault" — IMPERATIV-Form, keine Search-Frage!
+      // Trifft NICHT bei "Was hab ich notiert?" (Vergangenheits-Form = Such-Anfrage).
+      const looksSavey = /\b(speichere?|notiere?\s+(mir|dir|das|es)|merk\s+(dir|mir)|kopiere?|legen?.*notiz|in\s+(das\s+)?vault\s|in\s+obsidian)\b/i.test(message)
+                       && !/\b(was\s+hab|hast\s+du|finde|finden|find|such|suche|zeig|zeige)\b/i.test(message)
       let fallbackTool = null
       let fallbackParams = {}
       if (looksSavey && onToolCall) {
