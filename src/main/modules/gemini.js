@@ -316,23 +316,34 @@ export async function geminiChat({ message, history = [], apiKey, model, onToolC
       const cand = response.candidates?.[0]
       console.warn('[GEMINI] Empty response. finishReason:', cand?.finishReason, '| parts:', JSON.stringify(cand?.content?.parts || []))
 
-      // Sicherheitsnetz: Sieht die User-Frage nach Web-Search aus? Dann rufen wir
+      // Sicherheitsnetz 1: Sieht die User-Frage nach Web-Search aus? Dann rufen wir
       // web_search selbst auf und lassen Gemini nur noch synthetisieren.
       const looksWebbish = /\b(aktuell|neueste|neue|neuer|neues|neuigkeit|heute|kürzlich|gerade|momentan|derzeit|news|nachrichten|kurs|preis|aktie)\b/i.test(message)
       const hasOpenAIish = /\b(openai|anthropic|google|microsoft|apple|tesla|nvidia|meta|facebook|x\.com|twitter)\b/i.test(message)
+      // Sicherheitsnetz 2: Ist es eine System-Status-Frage?
+      const looksSystemy = /\b(mac|cpu|ram|arbeitsspeicher|festplatte|akku|prozessor|disk|system|läuft\s+mein)\b/i.test(message)
+      let fallbackTool = null
+      let fallbackParams = {}
       if ((looksWebbish || hasOpenAIish) && onToolCall) {
-        console.warn('[GEMINI] Falling back to direct web_search call')
+        fallbackTool = 'web_search'
+        fallbackParams = { query: message, count: 5, topic: 'news', time_range: 'week' }
+      } else if (looksSystemy && onToolCall) {
+        fallbackTool = 'system_getStatus'
+        fallbackParams = {}
+      }
+      if (fallbackTool) {
+        console.warn('[GEMINI] Falling back to direct', fallbackTool, 'call')
         try {
-          const searchResult = await onToolCall('web_search', { query: message, count: 5, topic: 'news', time_range: 'week' })
+          const toolResult = await onToolCall(fallbackTool, fallbackParams)
           contents.push({
             role: 'user',
-            parts: [{ functionResponse: { name: 'web_search', response: { result: searchResult } } }]
+            parts: [{ functionResponse: { name: fallbackTool, response: { result: toolResult } } }]
           })
           const synth = await geminiModel.generateContent({ contents })
           const synthText = synth.response.text?.() || ''
           if (synthText.trim()) return synthText
         } catch (err) {
-          console.warn('[GEMINI] Direct web_search fallback failed:', err.message)
+          console.warn('[GEMINI] Direct', fallbackTool, 'fallback failed:', err.message)
         }
       }
 
