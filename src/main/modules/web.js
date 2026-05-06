@@ -12,6 +12,7 @@
 //   3) Memory-Worker überspringt webTaintete Messages
 
 import axios from 'axios'
+import { saveToVaultImpl } from './webSave.js'
 
 const TAVILY_URL = 'https://api.tavily.com/search'
 
@@ -82,7 +83,9 @@ export const webModule = {
         if (status === 432) return { error: 'Tavily Plan-Limit erreicht (1.000 Credits/Monat im Free-Tier).' }
         return { error: `Web-Search-Fehler (${status || 'network'}): ${msg}` }
       }
-    }
+    },
+
+    saveToVault: async (params, ctx) => saveToVaultImpl(params, ctx)
   },
 
   tools: [
@@ -99,6 +102,20 @@ export const webModule = {
           time_range: { type: 'string', description: '"day", "week", "month", "year" – bei aktuellen/neuesten Themen IMMER setzen (z. B. "week")' }
         },
         required: ['query']
+      }
+    },
+    {
+      name: 'web_saveToVault',
+      description: 'Speichert einen Web-Suche-Treffer als referenzierte Notiz unter inbox/web/. NUR wenn Alex explizit "speicher das ins vault" / "leg eine notiz an" / "merk dir das mit quelle" sagt nach einer Web-Suche. Setzt Wikilinks zu bekannten Personen/Firmen/Quellen automatisch.',
+      parameters: {
+        type: 'object',
+        properties: {
+          title:     { type: 'string', description: 'Knapper deutscher Titel.' },
+          summary:   { type: 'string', description: 'Deutsche Zusammenfassung, 3–8 Sätze.' },
+          sources:   { type: 'array', items: { type: 'string' }, description: 'Quellen-URLs (1–3).' },
+          keyPoints: { type: 'array', items: { type: 'string' }, description: 'Optional: 3–5 Bullets.' }
+        },
+        required: ['title', 'summary', 'sources']
       }
     }
   ]

@@ -92,3 +92,13 @@ describe('saveToVaultImpl', () => {
   })
 })
 
+import { webModule } from '../web.js'
+describe('webModule', () => {
+  it('registers both web_search and web_saveToVault tools', () => {
+    const names = webModule.tools.map(t => t.name)
+    expect(names).toContain('web_search')
+    expect(names).toContain('web_saveToVault')
+  })
+})
+
+
