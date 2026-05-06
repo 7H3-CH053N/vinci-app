@@ -327,9 +327,16 @@ export async function geminiChat({ message, history = [], apiKey, model, onToolC
       const hasOpenAIish = /\b(openai|anthropic|google|microsoft|apple|tesla|nvidia|meta|facebook|x\.com|twitter)\b/i.test(message)
       // Sicherheitsnetz 2: Ist es eine System-Status-Frage?
       const looksSystemy = /\b(mac|cpu|ram|arbeitsspeicher|festplatte|akku|prozessor|disk|system|läuft\s+mein)\b/i.test(message)
+      // Sicherheitsnetz 3: Ist es ein Blog-Sync-Befehl?
+      const looksBloggy = /\b(blog|posts?|artikel|digitalhandwerk)\b.*\b(sync|aktualisier|hol|lad|zieh|update|fetch|neue?)\b/i.test(message)
+                        || /\b(sync|aktualisier|hol|lad|zieh|fetch)\b.*\b(blog|posts?|artikel|digitalhandwerk)\b/i.test(message)
+                        || /^(sync\s+blog|blog\s+sync|blog\s+aktualisieren?|hol\s+(meine\s+)?(blog\s*)?(posts?|artikel))$/i.test(message.trim())
       let fallbackTool = null
       let fallbackParams = {}
-      if ((looksWebbish || hasOpenAIish) && onToolCall) {
+      if (looksBloggy && onToolCall) {
+        fallbackTool = 'blog_sync'
+        fallbackParams = {}
+      } else if ((looksWebbish || hasOpenAIish) && onToolCall) {
         fallbackTool = 'web_search'
         fallbackParams = { query: message, count: 5, topic: 'news', time_range: 'week' }
       } else if (looksSystemy && onToolCall) {
