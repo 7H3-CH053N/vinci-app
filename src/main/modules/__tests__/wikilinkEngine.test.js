@@ -42,3 +42,44 @@ describe('loadEntityInventory', () => {
     expect(inv.find(e => e.term === 'Plus')).toBeUndefined()
   })
 })
+
+import { applyWikilinks } from '../_wikilinkEngine.js'
+
+describe('applyWikilinks', () => {
+  const inventory = [
+    { term: 'Alex Januschewsky', canonical: 'Alex Januschewsky' },
+    { term: 'Alex',              canonical: 'Alex Januschewsky' },
+    { term: 'OpenAI',            canonical: 'OpenAI' }
+  ].sort((a, b) => b.term.length - a.term.length)
+
+  it('links first occurrence only of each canonical', () => {
+    const out = applyWikilinks('OpenAI rocks. OpenAI ftw.', inventory)
+    expect(out.body).toBe('[[OpenAI]] rocks. OpenAI ftw.')
+    expect(out.matched).toContain('OpenAI')
+  })
+  it('prefers longest match (Alex Januschewsky beats Alex)', () => {
+    const out = applyWikilinks('Alex Januschewsky ist Autor.', inventory)
+    expect(out.body).toContain('[[Alex Januschewsky]]')
+  })
+  it('uses display alias when matching a non-canonical term', () => {
+    const out = applyWikilinks('Alex schreibt viel.', inventory)
+    expect(out.body).toBe('[[Alex Januschewsky|Alex]] schreibt viel.')
+  })
+  it('does not double-link existing [[Wikilink]]', () => {
+    const out = applyWikilinks('[[OpenAI]] und OpenAI', inventory)
+    expect(out.body).toBe('[[OpenAI]] und OpenAI')
+  })
+  it('returns empty matched array when no entity present', () => {
+    const out = applyWikilinks('Plain text only.', inventory)
+    expect(out.matched).toEqual([])
+    expect(out.body).toBe('Plain text only.')
+  })
+  it('respects word boundaries — does not link inside other words', () => {
+    const out = applyWikilinks('OpenAItopia is not a thing.', inventory)
+    expect(out.body).toBe('OpenAItopia is not a thing.')
+  })
+  it('counts each canonical only once even if multiple aliases match', () => {
+    const out = applyWikilinks('Alex und Alex Januschewsky sind ein Mensch.', inventory)
+    expect(out.matched).toEqual(['Alex Januschewsky'])
+  })
+})

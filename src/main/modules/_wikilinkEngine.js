@@ -35,3 +35,37 @@ export function loadEntityInventory(vaultPath) {
   }
   return items.sort((a, b) => b.term.length - a.term.length)
 }
+
+function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') }
+
+export function applyWikilinks(body, inventory) {
+  let text = body
+  const matched = new Set()
+  const linkedCanonicals = new Set()
+
+  for (const entry of inventory) {
+    if (linkedCanonicals.has(entry.canonical)) continue
+    // If canonical already linked anywhere in text, mark and skip
+    const existingRe = new RegExp(`\\[\\[${escapeRegex(entry.canonical)}(\\||\\]\\])`, 'g')
+    if (existingRe.test(text)) {
+      linkedCanonicals.add(entry.canonical)
+      continue
+    }
+    const re = new RegExp(`(?<![\\[\\w])${escapeRegex(entry.term)}(?![\\w\\]])`, 'g')
+    let replaced = false
+    text = text.replace(re, (match, offset) => {
+      // Skip if this position is inside an existing [[ ... ]]
+      const before = text.slice(Math.max(0, offset - 100), offset)
+      const lastOpen  = before.lastIndexOf('[[')
+      const lastClose = before.lastIndexOf(']]')
+      if (lastOpen > lastClose) return match
+      if (replaced) return match
+      replaced = true
+      matched.add(entry.canonical)
+      linkedCanonicals.add(entry.canonical)
+      if (entry.term === entry.canonical) return `[[${entry.canonical}]]`
+      return `[[${entry.canonical}|${entry.term}]]`
+    })
+  }
+  return { body: text, matched: [...matched] }
+}
