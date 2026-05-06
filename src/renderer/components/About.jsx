@@ -32,17 +32,17 @@ export default function About({ onClose }) {
         {/* Divider */}
         <div className="about-divider" />
 
-        {/* Feature highlights */}
-        <div className="about-features">
-          <p className="about-features-headline">Vault &amp; Knowledge-Graph</p>
-          <ul className="about-features-list">
-            <li>WordPress-Blog-Importer (digitalhandwerk.rocks)</li>
-            <li>Auto-Wikilinks im Body, Backlinks in Entity-Notes</li>
-            <li>One-Shot-Cleaner mit Quarantäne &amp; Backup</li>
-            <li>Auto-Alias für Vor-/Nachname-Duplikate</li>
-            <li>&bdquo;Speicher das ins Vault&ldquo; nach Web-Recherche</li>
-            <li>Hardened Memory-Worker (gemma3:4b)</li>
-          </ul>
+        {/* Description — 9-10 Zeilen, was VINCI ist + macht */}
+        <div className="about-description">
+          <p className="about-copy">
+            VINCI ist dein persönlicher KI-Assistent. Voice-first, am Mac zuhause, mit echtem Gedächtnis. Er kennt deinen Kalender, deine Mails, deine Erinnerungen, deine Kontakte und dein Smart-Home — und steuert sie über natürliche Sprache.
+          </p>
+          <p className="about-copy" style={{ marginTop: 10 }}>
+            Im Hintergrund baut er einen Knowledge-Graph in Obsidian: jede Person, jede Firma, jedes Thema wird erkannt und automatisch verlinkt. Web-Recherchen kommen mit Quellen, Briefings starten den Tag, geplante Aufgaben laufen still im Hintergrund.
+          </p>
+          <p className="about-copy" style={{ marginTop: 10 }}>
+            Eine eigene KI für dein Leben, deine Daten, deine Gewohnheiten. Kein Cloud-Lock-in, kein generischer Chatbot.
+          </p>
         </div>
 
         {/* Divider */}
@@ -61,10 +61,10 @@ export default function About({ onClose }) {
           <p className="about-copy" style={{ marginTop: 12 }}>
             Ein{' '}
             <a
-              href="https://vibecodes.at"
+              href="https://vibecraft.rocks"
               className="about-link"
-              onClick={e => { e.preventDefault(); window.lyra.openExternal('https://vibecodes.at') }}
-            >vibecodes.at</a>
+              onClick={e => { e.preventDefault(); window.lyra.openExternal('https://vibecraft.rocks') }}
+            >vibecraft.rocks</a>
             {' '}Projekt
           </p>
         </div>
