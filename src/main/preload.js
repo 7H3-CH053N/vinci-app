@@ -14,6 +14,8 @@ contextBridge.exposeInMainWorld('lyra', {
   validateVaultPath: (path)           => ipcRenderer.invoke('lyra:validateVaultPath', path),
   migrationPlan:   ()                 => ipcRenderer.invoke('lyra:migration:plan'),
   migrationApply:  (plan, opts)       => ipcRenderer.invoke('lyra:migration:apply', plan, opts),
+  cleanerScan:     ()                 => ipcRenderer.invoke('lyra:cleaner:scan'),
+  cleanerApply:    (plan, opts)       => ipcRenderer.invoke('lyra:cleaner:apply', plan, opts),
   openExternal:    (url)              => ipcRenderer.send('lyra:open:external', url),
 
   // Aufgaben (geplante Prompts)

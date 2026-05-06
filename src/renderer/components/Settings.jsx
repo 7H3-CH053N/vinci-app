@@ -23,6 +23,9 @@ export default function Settings({ onClose }) {
   const [migPlan, setMigPlan]     = useState(null)
   const [migReport, setMigReport] = useState(null)
   const [migBusy, setMigBusy]     = useState(false)
+  const [cleanPlan, setCleanPlan]     = useState(null)
+  const [cleanReport, setCleanReport] = useState(null)
+  const [cleanBusy, setCleanBusy]     = useState(false)
 
   async function runMigPlan() {
     setMigBusy(true)
@@ -46,6 +49,44 @@ export default function Settings({ onClose }) {
       const r = await window.lyra.migrationApply(migPlan, { dryRun: false })
       setMigReport({ ...r, _dry: false })
     } finally { setMigBusy(false) }
+  }
+
+  async function runCleanScan() {
+    setCleanBusy(true)
+    try {
+      const r = await window.lyra.cleanerScan()
+      setCleanPlan(r)
+      setCleanReport(null)
+    } finally { setCleanBusy(false) }
+  }
+  function toggleProposal(id) {
+    if (!cleanPlan) return
+    setCleanPlan({
+      ...cleanPlan,
+      proposals: cleanPlan.proposals.map(p => p.id === id ? { ...p, accepted: !p.accepted } : p)
+    })
+  }
+  function setAllAccepted(value) {
+    if (!cleanPlan) return
+    setCleanPlan({
+      ...cleanPlan,
+      proposals: cleanPlan.proposals.map(p => ({ ...p, accepted: value }))
+    })
+  }
+  async function runCleanDry() {
+    setCleanBusy(true)
+    try {
+      const r = await window.lyra.cleanerApply(cleanPlan, { dryRun: true })
+      setCleanReport({ ...r, _dry: true })
+    } finally { setCleanBusy(false) }
+  }
+  async function runCleanApply() {
+    if (!confirm('Echter Lauf — Backup wird unter ~/.vinci-archive/ erstellt, akzeptierte Vorschläge werden umgesetzt. Sicher?')) return
+    setCleanBusy(true)
+    try {
+      const r = await window.lyra.cleanerApply(cleanPlan, { dryRun: false })
+      setCleanReport({ ...r, _dry: false })
+    } finally { setCleanBusy(false) }
   }
 
   useEffect(() => {
@@ -578,6 +619,53 @@ export default function Settings({ onClose }) {
               <div style={{ marginTop: 12, padding: 8, background: 'rgba(0,200,100,0.1)', borderRadius: 4 }}>
                 <strong>{migReport._dry ? 'Dry-Run Report' : 'Echt-Lauf Report'}:</strong>
                 <pre style={{ fontSize: '0.8em' }}>{JSON.stringify(migReport, null, 2)}</pre>
+              </div>
+            )}
+          </div>
+
+          {/* Knowledge-Graph Cleaner ─────────────────────────────────────── */}
+          <div className="field" style={{ borderTop: '1px solid var(--border)', paddingTop: 16, marginTop: 8 }}>
+            <label style={{ fontSize: 13, fontWeight: 600 }}>Knowledge-Graph aufräumen</label>
+            <p className="hint">
+              Findet Müll-Notes (Hardware-Metriken, Telefonnummern, Tarif-Namen wie Plus/Pro,
+              Domain-Notes in falscher Kategorie, doppelte Personen-Einträge mit Vor- und vollem Namen)
+              und schlägt Aufräum-Aktionen vor. Du wählst pro Vorschlag, was angewendet werden soll.
+            </p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+              <button className="btn-secondary" disabled={cleanBusy} onClick={runCleanScan}>1. Vault scannen</button>
+              <button className="btn-secondary" disabled={cleanBusy || !cleanPlan} onClick={runCleanDry}>2. Dry-Run</button>
+              <button className="btn-secondary" disabled={cleanBusy || !cleanPlan} onClick={runCleanApply}>3. Echt anwenden (mit Backup)</button>
+            </div>
+            {cleanPlan && (
+              <div style={{ marginTop: 12 }}>
+                <p style={{ fontSize: '0.9em' }}>
+                  {cleanPlan.scanned} Notes gescannt, {cleanPlan.proposals?.length ?? 0} Vorschläge.
+                  {' '}
+                  <a href="#" onClick={(e) => { e.preventDefault(); setAllAccepted(true) }}>Alle akzeptieren</a>
+                  {' / '}
+                  <a href="#" onClick={(e) => { e.preventDefault(); setAllAccepted(false) }}>Alle ablehnen</a>
+                </p>
+                <div style={{ maxHeight: 300, overflow: 'auto', border: '1px solid var(--border)', padding: 8 }}>
+                  {cleanPlan.proposals?.map(p => (
+                    <label key={p.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '4px 0', fontSize: '0.85em' }}>
+                      <input type="checkbox" checked={p.accepted} onChange={() => toggleProposal(p.id)} />
+                      <span>
+                        <strong>[{p.kind}]</strong>{' '}
+                        {p.kind === 'trash' && <code>{p.category}/{p.name}</code>}
+                        {p.kind === 'recategorize' && <><code>{p.from_category}/{p.name}</code> → <code>{p.to_category}/</code></>}
+                        {p.kind === 'merge' && <><code>{p.alias}</code> → <code>{p.name}</code></>}
+                        {' — '}
+                        <span style={{ opacity: 0.7 }}>{p.reason}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+            {cleanReport && (
+              <div style={{ marginTop: 12, padding: 8, background: cleanReport.errors?.length ? 'rgba(255,80,80,0.1)' : 'rgba(0,200,100,0.1)', borderRadius: 4 }}>
+                <strong>{cleanReport._dry ? 'Dry-Run Report' : 'Echt-Lauf Report'}:</strong>
+                <pre style={{ fontSize: '0.8em' }}>{JSON.stringify(cleanReport, null, 2)}</pre>
               </div>
             )}
           </div>
