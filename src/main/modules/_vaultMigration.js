@@ -1,9 +1,9 @@
 // One-shot migration of two orphan Mac-only vaults into the canonical vault.
 // All operations are dry-run-safe. Real writes happen only when dryRun=false.
 
-import archiver from 'archiver'
-import { existsSync, statSync, readdirSync, readFileSync, writeFileSync, mkdirSync, renameSync, createWriteStream } from 'fs'
-import { join, basename, relative } from 'path'
+import { spawn } from 'child_process'
+import { existsSync, statSync, readdirSync, readFileSync, writeFileSync, mkdirSync, renameSync } from 'fs'
+import { join, basename, relative, dirname } from 'path'
 import { homedir } from 'os'
 
 // Beide Mac-Waisen-Vaults haben unterschiedliche Layouts:
@@ -126,15 +126,19 @@ export async function applyMigrationFromPlan(plan, { dryRun = true } = {}) {
   return report
 }
 
+// Nutzt macOS' eingebauten `zip` (BSD zip) — keine externe Dependency, keine Bundler-Sorgen.
 export function zipDirectory(srcDir, outZip) {
   return new Promise((resolve, reject) => {
-    const out = createWriteStream(outZip)
-    const archive = archiver('zip', { zlib: { level: 6 } })
-    out.on('close', () => resolve(archive.pointer()))
-    archive.on('error', reject)
-    archive.pipe(out)
-    archive.directory(srcDir, false)
-    archive.finalize()
+    if (!existsSync(srcDir)) return reject(new Error(`zipDirectory: srcDir nicht gefunden: ${srcDir}`))
+    mkdirSync(dirname(outZip), { recursive: true })
+    const child = spawn('zip', ['-rq', outZip, '.'], { cwd: srcDir })
+    let stderr = ''
+    child.stderr.on('data', d => { stderr += d.toString() })
+    child.on('error', err => reject(err))
+    child.on('close', code => {
+      if (code === 0) resolve()
+      else reject(new Error(`zip exited with code ${code}: ${stderr.trim()}`))
+    })
   })
 }
 
