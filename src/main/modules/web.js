@@ -49,7 +49,10 @@ export const webModule = {
         const VALID_RANGES = ['day','week','month','year']
         if (VALID_RANGES.includes(time_range)) body.time_range = time_range
         const res = await axios.post(TAVILY_URL, body, {
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type':  'application/json',
+            'Authorization': `Bearer ${apiKey}`
+          },
           timeout: 15_000
         })
 
