@@ -42,7 +42,11 @@ export function setupIPC(win, { getSettings, saveSettings, getTokens, saveTokens
     const TAINTING_TOOLS = new Set([
       'web_search',
       'messages_getRecent', 'messages_getUnread', 'messages_search',
-      'mail_getUnread', 'mail_getLatest'
+      'mail_getUnread', 'mail_getLatest',
+      // Live volatile data — never goes to memory
+      'system_getStatus', 'system_getProcesses',
+      'strom_getCurrent', 'strom_getToday',
+      'homeassistant_state', 'homeassistant_call', 'homeassistant_list', 'homeassistant_open'
     ])
 
     // Schicht 4: Hard-Block. Nach einem tainting Tool dürfen keine Speicher-Tools
