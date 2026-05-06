@@ -163,3 +163,60 @@ describe('appendBacklinkBullet', () => {
     expect(appendBacklinkBullet(V2, 'Nonexistent', 'Firmen', 'slug')).toBe(false)
   })
 })
+
+import { detectAutoFirmaCandidates, createAutoFirmaStub } from '../_wikilinkEngine.js'
+import { existsSync as fsExistsSync, readFileSync as fsRead } from 'fs'
+
+describe('detectAutoFirmaCandidates', () => {
+  it('flags names appearing in 2+ posts', () => {
+    const posts = [
+      { slug: 'a', body: 'Mistral is interesting. Anthropic too.' },
+      { slug: 'b', body: 'Mistral grows. Microsoft watches.' },
+      { slug: 'c', body: 'Anthropic launches.' }
+    ]
+    const known = new Set(['openai'])
+    const out = detectAutoFirmaCandidates(posts, known, 2)
+    expect(out.has('Mistral')).toBe(true)
+    expect(out.has('Anthropic')).toBe(true)
+    expect(out.has('Microsoft')).toBe(false)
+  })
+  it('skips names already in known set', () => {
+    const posts = [
+      { slug: 'a', body: 'OpenAI is everywhere.' },
+      { slug: 'b', body: 'OpenAI again.' }
+    ]
+    const known = new Set(['openai'])
+    const out = detectAutoFirmaCandidates(posts, known, 2)
+    expect(out.has('OpenAI')).toBe(false)
+  })
+  it('honors custom threshold', () => {
+    const posts = [
+      { slug: 'a', body: 'Mistral.' },
+      { slug: 'b', body: 'Mistral.' },
+      { slug: 'c', body: 'Mistral.' }
+    ]
+    const known = new Set()
+    expect(detectAutoFirmaCandidates(posts, known, 2).has('Mistral')).toBe(true)
+    expect(detectAutoFirmaCandidates(posts, known, 4).has('Mistral')).toBe(false)
+  })
+})
+
+const V3 = join(tmpdir(), 'vinci-stub-test')
+describe('createAutoFirmaStub', () => {
+  beforeEach(() => { rmSync(V3, { recursive: true, force: true }); mkdirSync(V3, { recursive: true }) })
+  afterEach(() => rmSync(V3, { recursive: true, force: true }))
+
+  it('creates a Firmen note with auto_created flag', () => {
+    expect(createAutoFirmaStub(V3, 'Mistral', ['post-a', 'post-b'])).toBe(true)
+    const c = fsRead(join(V3, 'VINCI/Firmen/Mistral.md'), 'utf8')
+    expect(c).toContain('auto_created: true')
+    expect(c).toContain('first_seen_in:')
+    expect(c).toContain('[[post-a]]')
+  })
+  it('does not overwrite if file exists', () => {
+    mkdirSync(join(V3, 'VINCI/Firmen'), { recursive: true })
+    writeFileSync(join(V3, 'VINCI/Firmen/Mistral.md'), 'EXISTING')
+    expect(createAutoFirmaStub(V3, 'Mistral', ['x'])).toBe(false)
+    expect(fsRead(join(V3, 'VINCI/Firmen/Mistral.md'), 'utf8')).toBe('EXISTING')
+  })
+})

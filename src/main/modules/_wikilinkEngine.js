@@ -112,6 +112,49 @@ export function processPostFile(content, inventory) {
   }
 }
 
+export function detectAutoFirmaCandidates(processedPosts, knownEntities, threshold = 2) {
+  // Heuristic: capitalized words / two-cap-tokens
+  const RE = /\b([A-ZÄÖÜ][a-zäöüß]+(?:\s[A-ZÄÖÜ][a-zäöüß]+)?)\b/g
+  const candidates = new Map()
+  for (const post of processedPosts) {
+    const seen = new Set()
+    const body = post.body || ''
+    for (const m of body.matchAll(RE)) {
+      const name = m[1]
+      if (knownEntities.has(name.toLowerCase())) continue
+      if (seen.has(name)) continue
+      seen.add(name)
+      if (!candidates.has(name)) candidates.set(name, [])
+      candidates.get(name).push(post.slug)
+    }
+  }
+  const out = new Map()
+  for (const [name, slugs] of candidates) {
+    if (slugs.length >= threshold) out.set(name, slugs)
+  }
+  return out
+}
+
+export function createAutoFirmaStub(vaultPath, name, firstSeenIn) {
+  const dir = join(vaultPath, 'VINCI', 'Firmen')
+  mkdirSync(dir, { recursive: true })
+  const file = join(dir, `${name}.md`)
+  if (existsSync(file)) return false
+  const content = `---
+source: VINCI
+category: Firmen
+created: ${new Date().toISOString().slice(0, 10)}
+auto_created: true
+first_seen_in: [${firstSeenIn.slice(0, 3).map(s => `"[[${s}]]"`).join(', ')}]
+---
+
+# ${name}
+
+`
+  writeFileSync(file, content, 'utf8')
+  return true
+}
+
 export function appendBacklinkBullet(vaultPath, entityName, category, postSlug) {
   const file = join(vaultPath, 'VINCI', category, `${entityName}.md`)
   if (!existsSync(file)) return false
