@@ -69,3 +69,45 @@ export function applyWikilinks(body, inventory) {
   }
   return { body: text, matched: [...matched] }
 }
+
+function splitFrontmatter(content) {
+  const m = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/)
+  if (!m) return { fm: '', body: content, hasFm: false }
+  return { fm: m[1], body: m[2], hasFm: true }
+}
+
+function setFmKey(fm, key, value) {
+  const re = new RegExp(`^${key}:\\s*.*$`, 'm')
+  if (re.test(fm)) return fm.replace(re, `${key}: ${value}`)
+  return (fm.endsWith('\n') ? fm : fm + '\n') + `${key}: ${value}`
+}
+
+export function processPostFile(content, inventory) {
+  const { fm, body, hasFm } = splitFrontmatter(content)
+  const { body: newBody, matched } = applyWikilinks(body, inventory)
+  // Also collect existing wikilinks already in body that match inventory canonicals
+  const allCanon = new Set(matched)
+  const canonSet = new Set(inventory.map(e => e.canonical))
+  for (const m of newBody.matchAll(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g)) {
+    const target = m[1].trim()
+    if (canonSet.has(target)) allCanon.add(target)
+  }
+  const sortedCanon = [...allCanon].sort()
+  const wikilinkArr = sortedCanon.map(m => `"[[${m}]]"`).join(', ')
+  const mentionsLine = `[${wikilinkArr}]`
+
+  let newContent
+  if (hasFm) {
+    const newFm = setFmKey(fm, 'mentions', mentionsLine)
+    newContent = `---\n${newFm}\n---\n${newBody}`
+  } else {
+    // Synthesize a minimal frontmatter for posts that lack one
+    newContent = `---\nmentions: ${mentionsLine}\n---\n\n${newBody}`
+  }
+
+  return {
+    content: newContent,
+    changed: newContent !== content,
+    mentions: sortedCanon.map(m => `[[${m}]]`)
+  }
+}

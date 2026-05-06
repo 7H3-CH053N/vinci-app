@@ -83,3 +83,55 @@ describe('applyWikilinks', () => {
     expect(out.matched).toEqual(['Alex Januschewsky'])
   })
 })
+
+import { processPostFile } from '../_wikilinkEngine.js'
+
+describe('processPostFile', () => {
+  it('updates body wikilinks and mentions in frontmatter', () => {
+    const input = `---
+title: "x"
+mentions: []
+---
+
+OpenAI is great.`
+    const inv = [{ term: 'OpenAI', canonical: 'OpenAI' }]
+    const r = processPostFile(input, inv)
+    expect(r.changed).toBe(true)
+    expect(r.mentions).toEqual(['[[OpenAI]]'])
+    expect(r.content).toContain('mentions: ["[[OpenAI]]"]')
+    expect(r.content).toContain('[[OpenAI]] is great')
+  })
+  it('returns changed=false on second run (idempotent)', () => {
+    const input = `---
+title: "x"
+mentions: ["[[OpenAI]]"]
+---
+
+[[OpenAI]] is great.`
+    const inv = [{ term: 'OpenAI', canonical: 'OpenAI' }]
+    const r = processPostFile(input, inv)
+    expect(r.changed).toBe(false)
+  })
+  it('preserves other frontmatter keys', () => {
+    const input = `---
+title: "Title"
+author: "[[Alex Januschewsky]]"
+mentions: []
+tags: [a, b]
+---
+
+OpenAI body.`
+    const inv = [{ term: 'OpenAI', canonical: 'OpenAI' }]
+    const r = processPostFile(input, inv)
+    expect(r.content).toContain('title: "Title"')
+    expect(r.content).toContain('author: "[[Alex Januschewsky]]"')
+    expect(r.content).toContain('tags: [a, b]')
+  })
+  it('handles posts with no frontmatter', () => {
+    const input = '# Plain\n\nOpenAI body.'
+    const inv = [{ term: 'OpenAI', canonical: 'OpenAI' }]
+    const r = processPostFile(input, inv)
+    expect(r.changed).toBe(true)
+    expect(r.content).toContain('[[OpenAI]]')
+  })
+})
