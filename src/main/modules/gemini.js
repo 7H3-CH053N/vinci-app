@@ -341,20 +341,33 @@ export async function geminiChat({ message, history = [], apiKey, model, onToolC
       let fallbackTool = null
       let fallbackParams = {}
       if (looksSavey && onToolCall) {
-        // Aus contents den letzten Assistant-Text fischen (history kommt persisted aus DB,
-        // enthält nur 'user'/'assistant'/'model'-Roles als Text — keine strukturierten functionResponses).
+        // Letzten Assistant-Text + letzte User-Frage aus contents fischen
         let lastAssistantText = null
+        let prevUserMsg = null
         for (let i = contents.length - 1; i >= 0; i--) {
           const c = contents[i]
-          if (c.role === 'model' || c.role === 'assistant') {
-            const t = (c.parts || []).map(p => p.text || '').join('').trim()
-            if (t) { lastAssistantText = t; break }
+          const t = (c.parts || []).map(p => p.text || '').join('').trim()
+          if (!t) continue
+          if (!lastAssistantText && (c.role === 'model' || c.role === 'assistant')) {
+            lastAssistantText = t
+          } else if (lastAssistantText && !prevUserMsg && c.role === 'user' && t !== message) {
+            prevUserMsg = t
+            break
           }
         }
         if (lastAssistantText) {
-          // URLs aus dem letzten Assistant-Text extrahieren (Gemini schreibt Quellen in die Antwort)
           const urlRe = /https?:\/\/[^\s\)\]]+/g
-          const sources = [...new Set((lastAssistantText.match(urlRe) || []))].slice(0, 3)
+          let sources = [...new Set((lastAssistantText.match(urlRe) || []))].slice(0, 3)
+          // Fallback: keine URLs im Text → web_search mit vorheriger User-Frage neu
+          if (sources.length === 0 && prevUserMsg) {
+            console.warn('[GEMINI] Save fallback: keine URLs im Assistant-Text, re-fetche web_search mit:', prevUserMsg.slice(0, 60))
+            try {
+              const freshSearch = await onToolCall('web_search', { query: prevUserMsg, count: 3, topic: 'news', time_range: 'week' })
+              sources = (freshSearch?.results || []).slice(0, 3).map(r => r.url).filter(Boolean)
+            } catch (err) {
+              console.warn('[GEMINI] Save fallback: re-fetch failed:', err.message)
+            }
+          }
           if (sources.length > 0) {
             const firstSentence = lastAssistantText.split(/[.!?\n]/)[0].slice(0, 80).trim() || 'Web-Recherche'
             fallbackTool = 'web_saveToVault'
@@ -364,7 +377,7 @@ export async function geminiChat({ message, history = [], apiKey, model, onToolC
               sources
             }
           } else {
-            console.warn('[GEMINI] Save fallback: keine URLs im letzten Assistant-Text gefunden')
+            console.warn('[GEMINI] Save fallback: keine Quellen verfügbar — kann nicht speichern')
           }
         }
       } else if (looksBloggy && onToolCall) {
