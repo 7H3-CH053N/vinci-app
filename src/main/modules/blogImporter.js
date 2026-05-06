@@ -2,6 +2,7 @@ import axios from 'axios'
 import TurndownService from 'turndown'
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from 'fs'
 import { join } from 'path'
+import { loadEntityInventory, processPostFile, appendBacklinkBullet, detectAutoFirmaCandidates, createAutoFirmaStub } from './_wikilinkEngine.js'
 
 export async function fetchPostsSince(source, sinceIso) {
   const all = []
@@ -176,6 +177,38 @@ export async function runOnce(source, vaultPath, { force = false, dryRun = false
       result.errors.push({ slug: p.slug, error: err.message })
     }
   }
+  // Body wikilink pass over the folder + auto-firma detection
+  if (!dryRun) {
+    try {
+      const inventory = loadEntityInventory(vaultPath)
+      const known = new Set(inventory.map(e => e.term.toLowerCase()))
+      const processed = []
+      for (const f of readdirSync(folder).filter(x => x.endsWith('.md'))) {
+        const path = join(folder, f)
+        let original
+        try { original = readFileSync(path, 'utf8') } catch { continue }
+        const { content, changed, mentions } = processPostFile(original, inventory)
+        if (changed) writeFileSync(path, content, 'utf8')
+        processed.push({ slug: f.replace(/\.md$/, ''), body: content })
+        for (const m of mentions) {
+          const canonical = m.replace(/^\[\[|\]\]$/g, '').split('|')[0]
+          const ie = inventory.find(i => i.canonical === canonical)
+          if (ie?.category && ie.category !== 'alias') {
+            appendBacklinkBullet(vaultPath, canonical, ie.category, f.replace(/\.md$/, ''))
+          }
+        }
+      }
+      const candidates = detectAutoFirmaCandidates(processed, known, 2)
+      let stubCount = 0
+      for (const [name, slugs] of candidates) {
+        if (createAutoFirmaStub(vaultPath, name, slugs)) stubCount++
+      }
+      result.auto_firma_created = stubCount
+    } catch (err) {
+      result.errors.push({ phase: 'body-pass', error: err.message })
+    }
+  }
+
   if (newest) result.newest_post = decodeEntities(newest.title?.rendered || '')
   return result
 }

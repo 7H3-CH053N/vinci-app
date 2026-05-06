@@ -28,6 +28,8 @@ export default function Settings({ onClose }) {
   const [cleanBusy, setCleanBusy]     = useState(false)
   const [blogResult, setBlogResult]   = useState(null)
   const [blogBusy, setBlogBusy]       = useState(false)
+  const [relinkResult, setRelinkResult] = useState(null)
+  const [relinkBusy, setRelinkBusy]     = useState(false)
 
   async function runMigPlan() {
     setMigBusy(true)
@@ -96,6 +98,14 @@ export default function Settings({ onClose }) {
     try {
       setBlogResult(await window.lyra.blogSync({ force }))
     } finally { setBlogBusy(false) }
+  }
+
+  async function runRelinkAll() {
+    if (!confirm('Alle Posts neu verlinken — kann je nach Vault-Größe 10-30 Sekunden dauern. OK?')) return
+    setRelinkBusy(true)
+    try {
+      setRelinkResult(await window.lyra.blogRelinkAll())
+    } finally { setRelinkBusy(false) }
   }
 
   useEffect(() => {
@@ -695,6 +705,18 @@ export default function Settings({ onClose }) {
                 <pre style={{ fontSize: '0.8em' }}>{JSON.stringify(blogResult, null, 2)}</pre>
               </div>
             )}
+            <div style={{ marginTop: '12px' }}>
+              <button disabled={relinkBusy} onClick={runRelinkAll}>Bestehende Posts neu verlinken</button>
+              <p className="hint" style={{ fontSize: '0.85em' }}>
+                Scannt alle bereits importierten Posts, setzt Wikilinks zu bekannten Personen/Firmen/Quellen,
+                fügt Backlinks in die Entity-Notes ein. Idempotent (mehrfaches Ausführen schadet nicht).
+              </p>
+              {relinkResult && (
+                <div style={{ marginTop: '8px', padding: '8px', background: 'rgba(0,200,100,0.1)', borderRadius: '4px' }}>
+                  <pre style={{ fontSize: '0.8em' }}>{JSON.stringify(relinkResult, null, 2)}</pre>
+                </div>
+              )}
+            </div>
           </div>
         </>}
 

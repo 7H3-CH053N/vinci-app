@@ -5,6 +5,9 @@ import { detectMultipleVaults } from './modules/obsidian.js'
 import { planMigration, applyMigration } from './modules/_vaultMigration.js'
 import { scanVaultLocal, savePlan, applyPlan } from './modules/graphCleaner.js'
 import { runOnce as blogRunOnce } from './modules/blogImporter.js'
+import { loadEntityInventory, processPostFile, appendBacklinkBullet } from './modules/_wikilinkEngine.js'
+import { readdirSync, readFileSync, writeFileSync } from 'fs'
+import { join as joinPath } from 'path'
 import {
   listTasks, createTask, updateTask, deleteTask,
   executeTaskNow, getTaskResults, describeSchedule
@@ -261,6 +264,38 @@ export function setupIPC(win, { getSettings, saveSettings, getTokens, saveTokens
     if (!source) return { error: 'Keine Blog-Source konfiguriert.' }
     if (!settings.obsidian?.vaultPath) return { error: 'Kein Vault gesetzt.' }
     return await blogRunOnce(source, settings.obsidian.vaultPath, opts)
+  })
+
+  ipcMain.handle('lyra:blog:relinkAll', async () => {
+    const settings = getSettings()
+    const vault = settings.obsidian?.vaultPath
+    if (!vault) return { error: 'Kein Vault.' }
+    const sources = (settings.blogSources || []).filter(s => s.enabled)
+    let totalScanned = 0, totalChanged = 0, totalBacklinks = 0
+    const inv = loadEntityInventory(vault)
+    for (const source of sources) {
+      const folder = joinPath(vault, source.vaultFolder)
+      if (!existsSync(folder)) continue
+      for (const f of readdirSync(folder).filter(x => x.endsWith('.md'))) {
+        totalScanned++
+        const path = joinPath(folder, f)
+        let original
+        try { original = readFileSync(path, 'utf8') } catch { continue }
+        const { content, changed, mentions } = processPostFile(original, inv)
+        if (changed) {
+          writeFileSync(path, content, 'utf8')
+          totalChanged++
+        }
+        for (const m of mentions) {
+          const canonical = m.replace(/^\[\[|\]\]$/g, '').split('|')[0]
+          const ie = inv.find(i => i.canonical === canonical)
+          if (ie?.category && ie.category !== 'alias') {
+            if (appendBacklinkBullet(vault, canonical, ie.category, f.replace(/\.md$/, ''))) totalBacklinks++
+          }
+        }
+      }
+    }
+    return { scanned: totalScanned, changed: totalChanged, backlinks_added: totalBacklinks }
   })
 
   ipcMain.handle('lyra:validateVaultPath', (_e, path) => {
