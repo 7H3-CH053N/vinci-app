@@ -1,0 +1,29 @@
+{
+  "name": "vinci",
+  "version": "2.0.0",
+  "description": "VINCI \u2013 Pers\u00f6nlicher KI-Assistent f\u00fcr macOS",
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "./node_modules/.bin/electron-vite dev",
+    "build": "./node_modules/.bin/electron-vite build && ./node_modules/.bin/electron-builder --config electron-builder.config.js",
+    "preview": "electron-vite preview"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.21.0",
+    "@react-three/drei": "^9.99.0",
+    "@react-three/fiber": "^8.17.0",
+    "axios": "^1.7.0",
+    "node-cron": "^3.0.3",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "three": "^0.165.0",
+    "zustand": "^4.5.0",
+    "xml2js": "^0.6.2"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.0",
+    "electron": "^31.0.0",
+    "electron-builder": "^25.0.0",
+    "electron-vite": "^2.3.0"
+  }
+}
