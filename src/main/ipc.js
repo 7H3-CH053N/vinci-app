@@ -16,6 +16,7 @@ import { saveMessage, getRecentHistory } from './modules/memory.js'
 import { scheduleMemoryConsolidation } from './modules/memoryWorker.js'
 import { ollamaChat } from './modules/ollama.js'
 import { registry } from './modules/registry.js'
+import { logEvent, readRecent as readRecentTelemetry } from './modules/telemetry.js'
 import { geminiChat } from './modules/gemini.js'
 import { triggerBriefing } from './scheduler.js'
 import * as edgeTTS from './modules/edgeTTS.js'
@@ -81,6 +82,7 @@ export function setupIPC(win, { getSettings, saveSettings, getTokens, saveTokens
         return result
       } catch (e) {
         console.error('[TOOL ERR]', toolName, e.message)
+        logEvent('tool_error', { tool: toolName, error: e.message, params: JSON.stringify(params).slice(0, 200) })
         return { error: e.message }
       }
     }
@@ -239,6 +241,11 @@ export function setupIPC(win, { getSettings, saveSettings, getTokens, saveTokens
     const vault = settings.obsidian?.vaultPath
     if (!vault) return { error: 'Vault-Pfad nicht gesetzt.' }
     return await applyMigration(vault, plan, opts)
+  })
+
+  // Telemetry — letzte N Events lesen für Diagnostik
+  ipcMain.handle('lyra:telemetry:recent', (_e, n = 100) => {
+    return { events: readRecentTelemetry(n) }
   })
 
   ipcMain.handle('lyra:cleaner:scan', async () => {

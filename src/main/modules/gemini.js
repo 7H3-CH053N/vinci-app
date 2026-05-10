@@ -2,6 +2,7 @@ import { buildMemoryContext } from './memory.js'
 import { getInventoryContext as getHAInventoryContext } from './homeassistant.js'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { registry } from './registry.js'
+import { logEvent } from './telemetry.js'
 
 const SYSTEM_PROMPT = `Du bist VINCI, der persönliche KI-Assistent von Alex Januschewsky (Prompt Rocker).
 Alex ist Managing Director von medienwerk KG und KI-Berater in Salzburg.
@@ -38,17 +39,29 @@ Beispiel: "Welche Termine habe ich?" → direkt calendar_getUpcoming aufrufen mi
 Beispiel: "Wann ist Termin mit X?" → calendar_getUpcoming mit days:14 aufrufen und im Ergebnis suchen
 Beispiel: "Stromverbrauch?" → direkt strom_getCurrent aufrufen.
 Nutze bei Personennamen oder unklarem Zeitraum immer days:14 für die Kalenderabfrage.
-SYSTEM: Bei Fragen nach "CPU", "RAM", "Speicher", "Akku", "Festplatte", "Prozesse", "System", "wie läuft mein Mac" → system_getStatus aufrufen. NIEMALS bei n8n/Workflow-Fragen — das ist eine andere Domain.
+SYSTEM: Bei Fragen nach "CPU", "RAM", "Speicher", "Akku", "Festplatte", "wie läuft mein Mac" → system_getStatus aufrufen. Bei "Prozesse", "was läuft alles", "welche Programme" → system_getProcesses. NIEMALS bei n8n/Workflow-Fragen.
 
-N8N: Bei Fragen mit "n8n", "Workflow", "Automation", "wie läuft mein n8n", "n8n status", "welche workflows" → IMMER n8n_getStatus oder n8n_getWorkflows aufrufen — niemals system_getStatus, das ist der Mac-Status, nicht n8n!
+N8N: Bei "n8n", "Workflow", "Automation", "wie läuft mein n8n", "n8n status" → n8n_getStatus. Bei "welche Workflows" → n8n_getWorkflows. Bei expliziten "trigger Workflow X" → n8n_triggerWebhook. NIEMALS system_getStatus für n8n-Fragen.
 
-WETTER: Bei "Wetter", "wie wird das Wetter", "Temperatur", "Regen", "Sonne", Ortsnamen mit Wetterkontext → IMMER weather_getCurrent oder weather_getForecast aufrufen.
+WETTER: Bei "wie ist das Wetter", "Temperatur jetzt", "regnet es" → weather_getCurrent. Bei "Wetter morgen/diese Woche/Vorhersage" → weather_getForecast.
 
-MAIL: Bei "Mails", "ungelesene Mails", "neueste E-Mails", "Posteingang" → IMMER mail_getUnread oder mail_getLatest aufrufen.
+MAIL: Bei "ungelesene Mails", "wie viele neue Mails" → mail_getUnread. Bei "letzte Mails", "neueste E-Mails", "was kam zuletzt rein" → mail_getLatest.
 
-OBSIDIAN: Bei "was hab ich notiert", "such in meinen Notizen", "obsidian", "vault" → IMMER obsidian_search aufrufen.
+REMINDERS lesen: Bei "was hab ich heute zu tun", "Aufgaben heute" → reminders_getToday. Bei "alle offenen Aufgaben" → reminders_getAll. Bei "welche Listen hab ich" → reminders_getLists.
 
-NEWS: Bei Fragen nach "Nachrichten", "News", "Neuigkeiten", "was gibt es Neues", "was ist passiert" → news_getNews aufrufen. Quellen gezielt wählen: bei Fußball/Salzburg nur salzburg_rbs, bei Tech nur futurezone, sonst alle.
+OBSIDIAN: Bei "was hab ich notiert", "such in meinen Notizen", "Vault" → obsidian_search (mit query). Bei expliziter Pfad-Angabe → obsidian_read. Bei "neue Notiz", "leg Notiz an" → obsidian_createNote (Voraussetzung: kein tainted Web-/Mail-Kontext, sonst nutze web_saveToVault).
+
+NEWS: Bei "Nachrichten", "News", "Neuigkeiten", "was ist passiert" → news_getNews. Quellen gezielt wählen: bei Fußball/Salzburg nur salzburg_rbs, bei Tech nur futurezone, sonst alle.
+
+STROM: Bei "Stromverbrauch jetzt", "wie viel Watt zieh ich gerade" → strom_getCurrent. Bei "wie viel Strom heute", "Tagesverbrauch" → strom_getToday.
+
+CONTACTS: Bei Namen-/Telefon-/Email-Suche → contacts_search ZUERST. Bei "ruf X an" → contacts_call (nach Search). Bei "schick X eine Mail" → contacts_message (nach Search). Niemals Kontaktdaten erfinden — wenn nichts gefunden, sag das ehrlich.
+
+HOMEASSISTANT (Smart Home — siehe HOME ASSISTANT-Sektion unten für Details):
+- Aktion (schalten/setzen) → homeassistant_call (mit Bestätigung)
+- Status ("ist X an", "wie warm") → homeassistant_state
+- "öffne Home Assistant", "zeig mir das Dashboard" → homeassistant_open
+- "welche Geräte hast du", "was kannst du steuern" → homeassistant_list
 
 Antworte NIE aus dem Gedächtnis wenn es um Termine, Kalender, Aufgaben oder Erinnerungen geht – IMMER Tool aufrufen. Gesprächshistorie kann veraltete oder falsche Kalender-Infos enthalten – ignorieren, immer live abfragen.
 
@@ -333,6 +346,12 @@ export async function geminiChat({ message, history = [], apiKey, model, onToolC
       // verbraucht, kein Output mehr übrig. Wir helfen nach.
       const cand = response.candidates?.[0]
       console.warn('[GEMINI] Empty response. finishReason:', cand?.finishReason, '| parts:', JSON.stringify(cand?.content?.parts || []))
+      logEvent('gemini_empty_stop', {
+        finishReason: cand?.finishReason,
+        partsCount:   (cand?.content?.parts || []).length,
+        message:      message.slice(0, 200),
+        modelName
+      })
 
       // Sicherheitsnetz 1: Sieht die User-Frage nach Web-Search aus? Dann rufen wir
       // web_search selbst auf und lassen Gemini nur noch synthetisieren.
@@ -418,6 +437,10 @@ export async function geminiChat({ message, history = [], apiKey, model, onToolC
       }
       if (fallbackTool) {
         console.warn('[GEMINI] Falling back to direct', fallbackTool, 'call')
+        logEvent('gemini_safety_net_fired', {
+          tool:    fallbackTool,
+          message: message.slice(0, 200)
+        })
         try {
           const toolResult = await onToolCall(fallbackTool, fallbackParams)
           contents.push({
@@ -439,6 +462,7 @@ export async function geminiChat({ message, history = [], apiKey, model, onToolC
         const retryText = retry.response.text?.() || ''
         if (retryText.trim()) return retryText
         console.warn('[GEMINI] Retry also empty — returning honest error')
+        logEvent('gemini_unrecoverable_empty', { message: message.slice(0, 200), modelName })
         return 'Ich habe keine Antwort generiert. Formulier die Frage bitte anders oder probier "such im Web nach …" als Trigger.'
       } catch (err) {
         console.warn('[GEMINI] Retry failed:', err.message)

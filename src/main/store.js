@@ -12,8 +12,8 @@ const DEFAULT_SETTINGS = {
   briefingTime: '06:30',
   aiProvider: 'gemini',      // 'gemini' | 'ollama'
   geminiApiKey: '',
-  geminiModel: 'gemini-2.5-flash',          // Default – schnell + gut bei Tool-Use
-  geminiFallbackModel: 'gemini-2.5-flash',  // Bei 503/Overload: automatischer Wechsel auf dieses Modell
+  geminiModel: 'gemini-2.5-pro',            // Default – beste Tool-Calling-Accuracy, weniger Empty-STOP-Quirks
+  geminiFallbackModel: 'gemini-2.5-flash',  // Bei 503/Overload: schneller Fallback (akzeptable Qualität)
   ollamaModel: 'gemma4',
   ollamaUrl: 'http://localhost:11434',
   memoryWorkerModel: 'gemma3:4b',
