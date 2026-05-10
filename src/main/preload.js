@@ -14,7 +14,7 @@ contextBridge.exposeInMainWorld('lyra', {
   validateVaultPath: (path)           => ipcRenderer.invoke('lyra:validateVaultPath', path),
   migrationPlan:   ()                 => ipcRenderer.invoke('lyra:migration:plan'),
   migrationApply:  (plan, opts)       => ipcRenderer.invoke('lyra:migration:apply', plan, opts),
-  cleanerScan:     ()                 => ipcRenderer.invoke('lyra:cleaner:scan'),
+  cleanerScan:     (opts)             => ipcRenderer.invoke('lyra:cleaner:scan', opts),
   cleanerApply:    (plan, opts)       => ipcRenderer.invoke('lyra:cleaner:apply', plan, opts),
   blogSync:        (opts)             => ipcRenderer.invoke('lyra:blog:sync', opts),
   blogRelinkAll:   ()                  => ipcRenderer.invoke('lyra:blog:relinkAll'),

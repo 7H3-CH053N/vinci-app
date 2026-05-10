@@ -168,7 +168,7 @@ import { detectAutoFirmaCandidates, createAutoFirmaStub } from '../_wikilinkEngi
 import { existsSync as fsExistsSync, readFileSync as fsRead } from 'fs'
 
 describe('detectAutoFirmaCandidates', () => {
-  it('flags names appearing in 2+ posts', () => {
+  it('flags names appearing in N+ posts (custom threshold)', () => {
     const posts = [
       { slug: 'a', body: 'Mistral is interesting. Anthropic too.' },
       { slug: 'b', body: 'Mistral grows. Microsoft watches.' },
@@ -198,6 +198,34 @@ describe('detectAutoFirmaCandidates', () => {
     const known = new Set()
     expect(detectAutoFirmaCandidates(posts, known, 2).has('Mistral')).toBe(true)
     expect(detectAutoFirmaCandidates(posts, known, 4).has('Mistral')).toBe(false)
+  })
+  it('rejects German stopwords (Aber, Abend, …) even when frequent', () => {
+    const posts = Array.from({ length: 6 }, (_, i) => ({
+      slug: `p${i}`,
+      body: 'Aber das ist anders. Abend war schön. Achtung war wichtig.'
+    }))
+    const out = detectAutoFirmaCandidates(posts, new Set(), 2)
+    expect(out.has('Aber')).toBe(false)
+    expect(out.has('Abend')).toBe(false)
+    expect(out.has('Achtung')).toBe(false)
+  })
+  it('rejects multi-word starting with stopword (e.g. "Aber Apple")', () => {
+    const posts = Array.from({ length: 6 }, (_, i) => ({
+      slug: `p${i}`,
+      body: 'Aber Apple ist anders. Aber Microsoft auch.'
+    }))
+    const out = detectAutoFirmaCandidates(posts, new Set(), 2)
+    expect(out.has('Aber Apple')).toBe(false)
+    expect(out.has('Aber Microsoft')).toBe(false)
+  })
+  it('rejects very short single-token names (< 4 chars)', () => {
+    const posts = Array.from({ length: 6 }, (_, i) => ({
+      slug: `p${i}`,
+      body: 'Am Mai war es heiß.'
+    }))
+    const out = detectAutoFirmaCandidates(posts, new Set(), 2)
+    expect(out.has('Am')).toBe(false)
+    expect(out.has('Mai')).toBe(false)
   })
 })
 

@@ -13,7 +13,20 @@ import { join, basename } from 'path'
 import { homedir } from 'os'
 import { VALID_CATS, isDomain } from './_graphCategories.js'
 import { isHardRejected, forceCategoryFor } from './obsidianGraph.js'
+import { isGermanStopword } from './_germanStopwords.js'
 import { zipDirectory } from './_vaultMigration.js'
+
+// Liest leichtgewichtig den Frontmatter-Header, um auto_created-Flag zu bekommen.
+function readFrontmatterFlags(filePath) {
+  try {
+    const content = readFileSync(filePath, 'utf8')
+    const m = content.match(/^---\n([\s\S]*?)\n---/)
+    if (!m) return { autoCreated: false }
+    return { autoCreated: /^auto_created:\s*true\b/m.test(m[1]) }
+  } catch {
+    return { autoCreated: false }
+  }
+}
 
 function listEntries(vault) {
   const root = join(vault, 'VINCI')
@@ -26,17 +39,39 @@ function listEntries(vault) {
     try { files = readdirSync(dir) } catch { continue }
     for (const f of files) {
       if (!f.endsWith('.md')) continue
-      out.push({ category: cat, name: f.replace(/\.md$/, ''), full: join(dir, f) })
+      const full = join(dir, f)
+      const { autoCreated } = readFrontmatterFlags(full)
+      out.push({ category: cat, name: f.replace(/\.md$/, ''), full, autoCreated })
     }
   }
   return out
 }
 
-export function scanVaultLocal(vaultPath) {
+/**
+ * @param {string} vaultPath
+ * @param {object} opts
+ *   - aggressiveAutoCreated: bool — wenn true, werden ALLE auto_created Stubs in
+ *     Firmen/ getrasht außer denen in _keep_auto.json. Sonst nur die mit deutscher
+ *     Stopword-Erkennung.
+ */
+export function scanVaultLocal(vaultPath, opts = {}) {
   const entries = listEntries(vaultPath)
   if (entries.length === 0) return { scanned: 0, proposals: [] }
   const proposals = []
   const byNameLc = new Map(entries.map(e => [e.name.toLowerCase(), e]))
+  // Whitelist für Aggressive-Mode: Firmen-Namen die NICHT getrasht werden sollen,
+  // selbst wenn sie als auto_created markiert sind. Datei: VINCI/_keep_auto.json
+  // Format: ["Mistral", "Anthropic", ...]
+  let keepWhitelist = new Set()
+  if (opts.aggressiveAutoCreated) {
+    try {
+      const f = join(vaultPath, 'VINCI', '_keep_auto.json')
+      if (existsSync(f)) {
+        const arr = JSON.parse(readFileSync(f, 'utf8'))
+        if (Array.isArray(arr)) keepWhitelist = new Set(arr.map(s => String(s).toLowerCase()))
+      }
+    } catch {}
+  }
 
   for (const e of entries) {
     // Trash: hard-reject
@@ -47,6 +82,29 @@ export function scanVaultLocal(vaultPath) {
         category: e.category,
         name: e.name,
         reason: 'Name matched hard-reject filter (phone/email/date/tier/system/model-version)'
+      })
+      continue
+    }
+    // Trash: auto-created stub mit deutschem Allerweltswort als Name (Aber, Abend, …)
+    // Manuell angelegte Einträge sind tabu — wir trashen NUR auto_created-Einträge.
+    if (e.autoCreated && isGermanStopword(e.name)) {
+      proposals.push({
+        kind: 'trash',
+        file: e.full,
+        category: e.category,
+        name: e.name,
+        reason: 'Auto-created stub mit deutschem Allerweltswort (Stopword-Filter)'
+      })
+      continue
+    }
+    // Aggressive-Mode: trash ALLE auto_created Firmen außer Whitelist
+    if (opts.aggressiveAutoCreated && e.autoCreated && e.category === 'Firmen' && !keepWhitelist.has(e.name.toLowerCase())) {
+      proposals.push({
+        kind: 'trash',
+        file: e.full,
+        category: e.category,
+        name: e.name,
+        reason: 'Aggressive-Mode: auto-created Firmen-Stub (nicht in _keep_auto.json)'
       })
       continue
     }
@@ -65,10 +123,13 @@ export function scanVaultLocal(vaultPath) {
       continue
     }
     // Merge: first-name + full-name pair (only when current entry is the multi-word name)
+    // Skip wenn first-token ein Stopword ist oder der partner auto_created ist (dann
+    // ist's kein echter Vorname-Alias-Pair, sondern Doppelmüll wie "Aber" + "Aber Apple").
     if (e.name.includes(' ')) {
       const firstWord = e.name.split(' ')[0]
+      if (isGermanStopword(firstWord)) continue
       const partner = byNameLc.get(firstWord.toLowerCase())
-      if (partner && partner.full !== e.full && partner.category === e.category) {
+      if (partner && partner.full !== e.full && partner.category === e.category && !partner.autoCreated) {
         proposals.push({
           kind: 'merge',
           from: [partner.full],

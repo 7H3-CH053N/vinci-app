@@ -65,4 +65,31 @@ describe('scanVaultLocal', () => {
     const plan = scanVaultLocal(VAULT)
     expect(plan).toEqual({ scanned: 0, proposals: [] })
   })
+
+  it('proposes trash for auto_created stubs with German stopword names', () => {
+    writeFileSync(join(G, 'Firmen/Aber.md'),    '---\nauto_created: true\n---\n# Aber\n')
+    writeFileSync(join(G, 'Firmen/Abend.md'),   '---\nauto_created: true\n---\n# Abend\n')
+    writeFileSync(join(G, 'Firmen/Achtung.md'), '---\nauto_created: true\n---\n# Achtung\n')
+    const plan = scanVaultLocal(VAULT)
+    const trash = plan.proposals.filter(p => p.kind === 'trash')
+    expect(trash.find(p => p.name === 'Aber')).toBeDefined()
+    expect(trash.find(p => p.name === 'Abend')).toBeDefined()
+    expect(trash.find(p => p.name === 'Achtung')).toBeDefined()
+  })
+
+  it('does NOT trash auto_created stubs with real-firm names', () => {
+    writeFileSync(join(G, 'Firmen/Mistral.md'),  '---\nauto_created: true\n---\n# Mistral\n')
+    writeFileSync(join(G, 'Firmen/Anthropic.md'),'---\nauto_created: true\n---\n# Anthropic\n')
+    const plan = scanVaultLocal(VAULT)
+    const trash = plan.proposals.filter(p => p.kind === 'trash')
+    expect(trash.find(p => p.name === 'Mistral')).toBeUndefined()
+    expect(trash.find(p => p.name === 'Anthropic')).toBeUndefined()
+  })
+
+  it('does NOT trash manual stubs even with stopword names (only auto_created)', () => {
+    writeFileSync(join(G, 'Firmen/Aber.md'), '---\n---\n# Aber\n')  // kein auto_created flag
+    const plan = scanVaultLocal(VAULT)
+    const trash = plan.proposals.filter(p => p.kind === 'trash' && p.name === 'Aber')
+    expect(trash.length).toBe(0)
+  })
 })

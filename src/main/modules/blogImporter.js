@@ -198,7 +198,9 @@ export async function runOnce(source, vaultPath, { force = false, dryRun = false
           }
         }
       }
-      const candidates = detectAutoFirmaCandidates(processed, known, 2)
+      // Threshold 4: weniger Fehlalarme aus deutschem Allgemeinwortschatz.
+      // Echte Firmen (Anthropic, Mistral, …) tauchen meist in deutlich mehr Posts auf.
+      const candidates = detectAutoFirmaCandidates(processed, known, 4)
       let stubCount = 0
       for (const [name, slugs] of candidates) {
         if (createAutoFirmaStub(vaultPath, name, slugs)) stubCount++

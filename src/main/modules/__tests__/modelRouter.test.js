@@ -51,11 +51,24 @@ describe('pickModel — Komplexe-Queries → Pro', () => {
   }
 })
 
-describe('pickModel — Standard-Queries → Pro (Tool-Call-Safety)', () => {
-  const standard = [
+describe('pickModel — Data-Lookup-Queries → Flash (Latenz-Optimierung)', () => {
+  // Diese Queries sind Tool-Call mit klar definierter Antwort — Flash ist schnell
+  // genug, nachdem Tool-Shortlisting (Phase J1) das Tool-Set bereits eingeengt hat.
+  const flashLookups = [
     'Wie viele ungelesene Mails habe ich?',
     'Was steht heute im Kalender?',
-    'Wie läuft mein Mac?',
+    'Wie läuft mein Mac?'
+  ]
+  for (const q of flashLookups) {
+    it(`flash für: "${q}"`, () => {
+      const r = pickModel(q, settings)
+      expect(r.model).toBe('gemini-2.5-flash')
+    })
+  }
+})
+
+describe('pickModel — Standard-Queries → Pro (Tool-Call-Safety)', () => {
+  const standard = [
     'Wie wird das Wetter morgen?',
     'Was hab ich zu Anthropic notiert?'
   ]

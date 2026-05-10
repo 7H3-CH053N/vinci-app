@@ -55,13 +55,17 @@ export default function Settings({ onClose }) {
     } finally { setMigBusy(false) }
   }
 
-  async function runCleanScan() {
+  async function runCleanScan(opts = {}) {
     setCleanBusy(true)
     try {
-      const r = await window.lyra.cleanerScan()
+      const r = await window.lyra.cleanerScan(opts)
       setCleanPlan(r)
       setCleanReport(null)
     } finally { setCleanBusy(false) }
+  }
+  async function runCleanScanAggressive() {
+    if (!confirm('Aggressive-Mode: ALLE auto-erstellten Firmen-Stubs werden zum Trash vorgeschlagen.\n\nWhitelist: VINCI/_keep_auto.json (Array von Namen).\n\nFortfahren?')) return
+    runCleanScan({ aggressiveAutoCreated: true })
   }
   function toggleProposal(id) {
     if (!cleanPlan) return
@@ -712,7 +716,8 @@ export default function Settings({ onClose }) {
               und schlägt Aufräum-Aktionen vor. Du wählst pro Vorschlag, was angewendet werden soll.
             </p>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
-              <button className="btn-secondary" disabled={cleanBusy} onClick={runCleanScan}>1. Vault scannen</button>
+              <button className="btn-secondary" disabled={cleanBusy} onClick={() => runCleanScan()}>1. Vault scannen</button>
+              <button className="btn-secondary" disabled={cleanBusy} onClick={runCleanScanAggressive} title="Trasht ALLE auto-erstellten Firmen-Stubs (außer Whitelist in VINCI/_keep_auto.json)">1b. Aggressive-Scan</button>
               <button className="btn-secondary" disabled={cleanBusy || !cleanPlan} onClick={runCleanDry}>2. Dry-Run</button>
               <button className="btn-secondary" disabled={cleanBusy || !cleanPlan} onClick={runCleanApply}>3. Echt anwenden (mit Backup)</button>
             </div>

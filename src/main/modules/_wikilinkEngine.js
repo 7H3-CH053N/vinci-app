@@ -4,6 +4,7 @@
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from 'fs'
 import { join } from 'path'
+import { isGermanStopword } from './_germanStopwords.js'
 
 const ENTITY_CATS = ['Personen', 'Firmen', 'Quellen']
 
@@ -112,7 +113,10 @@ export function processPostFile(content, inventory) {
   }
 }
 
-export function detectAutoFirmaCandidates(processedPosts, knownEntities, threshold = 2) {
+// Default threshold von 2 → 4 deutlich angehoben. 2 fängt zu viel deutschen
+// Allgemeinwortschatz ein, der durch Großschreibung am Satzanfang aussieht wie ein
+// Eigenname. Plus: deutsche Stopwords werden komplett ausgeschlossen.
+export function detectAutoFirmaCandidates(processedPosts, knownEntities, threshold = 4) {
   // Heuristic: capitalized words / two-cap-tokens
   const RE = /\b([A-ZÄÖÜ][a-zäöüß]+(?:\s[A-ZÄÖÜ][a-zäöüß]+)?)\b/g
   const candidates = new Map()
@@ -122,6 +126,11 @@ export function detectAutoFirmaCandidates(processedPosts, knownEntities, thresho
     for (const m of body.matchAll(RE)) {
       const name = m[1]
       if (knownEntities.has(name.toLowerCase())) continue
+      // Deutsche Allerweltswörter raus — vor Allem erstes Token bei Mehrwort-Namen.
+      // "Aber Apple", "Aber Vorsicht", "Abend Routine" etc. werden so eliminiert.
+      if (isGermanStopword(name)) continue
+      // Sehr kurze Single-Token-Namen sind unsicher (z.B. "Ab", "Am") — überspringen
+      if (!name.includes(' ') && name.length < 4) continue
       if (seen.has(name)) continue
       seen.add(name)
       if (!candidates.has(name)) candidates.set(name, [])

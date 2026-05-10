@@ -268,11 +268,11 @@ export function setupIPC(win, { getSettings, saveSettings, getTokens, saveTokens
   ipcMain.handle('lyra:proactive:run',   (_e, id) => runDaemonNow(id))
   ipcMain.handle('lyra:proactive:reschedule', () => { rescheduleProactiveDaemons(); return { ok: true } })
 
-  ipcMain.handle('lyra:cleaner:scan', async () => {
+  ipcMain.handle('lyra:cleaner:scan', async (_e, opts = {}) => {
     const settings = getSettings()
     const vault = settings.obsidian?.vaultPath
     if (!vault) return { error: 'Vault-Pfad nicht gesetzt.' }
-    const plan = scanVaultLocal(vault)
+    const plan = scanVaultLocal(vault, { aggressiveAutoCreated: !!opts.aggressiveAutoCreated })
     plan.proposals = plan.proposals.map((p, i) => ({ ...p, id: `p${i}`, accepted: true }))
     savePlan(plan)
     return plan
