@@ -231,8 +231,15 @@ export default function LyraOrbParticle({ isSpeaking = false, isThinking = false
         mid  = (w2 * 0.5 + w3 * 0.5) * 0.85
       }
 
-      // Radial breathing: currentRadius pulsiert sichtbar mit bass beim Sprechen
-      const breatheRadius = state === 'speaking' ? currentRadius + bass * 4 : currentRadius
+      // Radial breathing: das ist der HAUPT-Treiber für Pulsation beim Sprechen.
+      // Statt Velocity direkt zu pushen (führt zum "Wall-Crash") modulieren wir
+      // den Pull-Target (breatheRadius). Pull-back zieht dann automatisch zurück.
+      // Plus: schnelle Sub-Welle für "knirschende" Klang-Reaktion
+      let breatheRadius = currentRadius
+      if (state === 'speaking') {
+        const pulseFast = Math.sin(t * 12) * mid * 1.5
+        breatheRadius = currentRadius + bass * 6 + pulseFast
+      }
 
       // Transition tumble
       if (state !== lastState) { transitionEnergy = 1.0; lastState = state }
@@ -273,36 +280,30 @@ export default function LyraOrbParticle({ isSpeaking = false, isThinking = false
         vel[i3+2] += Math.sin(t * 0.022 + px * 0.9 + x * 0.1) * 0.0008 * currentSpeed
 
         const dist = Math.sqrt(x*x + y*y + z*z) || 0.01
-        // Pull-back nutzt breatheRadius im Speaking-Modus → orb atmet sichtbar mit bass
-        const pull = Math.max(0, dist - breatheRadius) * 0.002 + 0.0003
+        // Pull-back ist im Speaking-Modus deutlich stärker — verhindert Wall-Crash
+        // und sorgt dafür dass particles aktiv "atmen" (ringeln um breatheRadius)
+        const pullCoeff = state === 'speaking' ? 0.008 : 0.002
+        const pull = Math.max(0, dist - breatheRadius) * pullCoeff
+                   + Math.max(0, breatheRadius - dist) * pullCoeff * (state === 'speaking' ? -0.3 : 0)
+                   + 0.0003
         vel[i3]   -= (x / dist) * pull
         vel[i3+1] -= (y / dist) * pull
         vel[i3+2] -= (z / dist) * pull
 
-        // Audio-reaktive Pulse beim Sprechen — kraftvoll, JARVIS-Stil
-        if (bass > 0.05) {
-          // Bass = radiale Schock-Pulse (3× stärker als vorher)
-          vel[i3]   += (x / dist) * bass * 0.06
-          vel[i3+1] += (y / dist) * bass * 0.06
-          vel[i3+2] += (z / dist) * bass * 0.06
-        }
+        // Mid = Pro-Partikel-Shimmer (tangential, kein radialer Drift)
         if (state === 'speaking' && mid > 0.1) {
-          // Mid = Pro-Partikel-Shimmer (2× stärker, alle Achsen)
           const pulse = Math.sin(t * 8 + px)
-          vel[i3]   += (x / dist) * mid * 0.025 * pulse
-          vel[i3+1] += (y / dist) * mid * 0.025 * pulse
-          vel[i3+2] += (z / dist) * mid * 0.018 * pulse
-        }
-        // Brownian micro-jitter beim Sprechen — orb wirkt "elektrisch geladen"
-        if (state === 'speaking') {
-          vel[i3]   += (Math.random() - 0.5) * bass * 0.04
-          vel[i3+1] += (Math.random() - 0.5) * bass * 0.04
-          vel[i3+2] += (Math.random() - 0.5) * bass * 0.04
+          // tangentiale Komponente: senkrecht zum Radius statt entlang
+          vel[i3]   += (-y / dist) * mid * 0.012 * pulse
+          vel[i3+1] += (x / dist) * mid * 0.012 * pulse
+          vel[i3+2] += Math.sin(px + t * 5) * mid * 0.008
         }
 
-        vel[i3]   *= 0.992
-        vel[i3+1] *= 0.992
-        vel[i3+2] *= 0.992
+        // Stärkere Velocity-Dämpfung beim Sprechen — verhindert Akkumulation
+        const damp = state === 'speaking' ? 0.96 : 0.992
+        vel[i3]   *= damp
+        vel[i3+1] *= damp
+        vel[i3+2] *= damp
         a[i3]   += vel[i3]
         a[i3+1] += vel[i3+1]
         a[i3+2] += vel[i3+2]
