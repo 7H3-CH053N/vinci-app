@@ -45,7 +45,7 @@ contextBridge.exposeInMainWorld('lyra', {
   haCall:  (domain, service, data)          => ipcRenderer.invoke('lyra:ha:call',  { domain, service, data }),
 
   on: (channel, callback) => {
-    const allowed = ['lyra:briefing', 'lyra:openSettings', 'lyra:openAbout', 'lyra:openTasks', 'lyra:ptt', 'lyra:taskResult', 'lyra:openTaskResult']
+    const allowed = ['lyra:briefing', 'lyra:openSettings', 'lyra:openAbout', 'lyra:openTasks', 'lyra:ptt', 'lyra:taskResult', 'lyra:openTaskResult', 'lyra:proactive', 'lyra:openTab']
     if (!allowed.includes(channel)) return
     const handler = (_, ...args) => callback(...args)
     ipcRenderer.on(channel, handler)
