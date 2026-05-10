@@ -15,6 +15,9 @@ const DEFAULT_SETTINGS = {
   geminiModel: 'gemini-2.5-pro',            // Default-Pro: beste Tool-Calling-Accuracy, weniger Empty-STOP-Quirks
   geminiFallbackModel: 'gemini-2.5-flash',  // Bei 503/Overload: schneller Fallback (akzeptable Qualität)
   smartRouting: true,                        // Phase J2: triviale Queries gehen auf Flash, Standard+Komplex auf Pro
+  proactive: {                               // Phase J4: Hintergrund-Daemons für proaktive Notifications
+    calendarWarning: true                    // 15 min vor Termin
+  },
   ollamaModel: 'gemma4',
   ollamaUrl: 'http://localhost:11434',
   memoryWorkerModel: 'gemma3:4b',

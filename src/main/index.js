@@ -9,6 +9,7 @@ import { setupMemoryWorker } from './modules/memoryWorker.js'
 import { setupTasks } from './tasks.js'
 import { setupIPC } from './ipc.js'
 import { setupScheduler } from './scheduler.js'
+import { setupProactiveDaemons } from './modules/_proactiveDaemons.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const isDev = !app.isPackaged && process.env.NODE_ENV !== 'production'
@@ -196,6 +197,7 @@ app.whenReady().then(() => {
   setupMemoryWorker(getSettings)
   setupTasks(win)
   setupScheduler(win)
+  setupProactiveDaemons(win, getSettings)
 
   // Ollama-Daemon starten (für Memory-Worker + Obsidian-RAG)
   ensureOllamaRunning()

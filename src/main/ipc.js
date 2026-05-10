@@ -17,6 +17,7 @@ import { scheduleMemoryConsolidation } from './modules/memoryWorker.js'
 import { ollamaChat } from './modules/ollama.js'
 import { registry } from './modules/registry.js'
 import { logEvent, readRecent as readRecentTelemetry } from './modules/telemetry.js'
+import { listDaemons, runDaemonNow, rescheduleAll as rescheduleProactiveDaemons } from './modules/_proactiveDaemons.js'
 import { geminiChat } from './modules/gemini.js'
 import { routeAndLog } from './modules/_modelRouter.js'
 import { triggerBriefing } from './scheduler.js'
@@ -205,6 +206,8 @@ export function setupIPC(win, { getSettings, saveSettings, getTokens, saveTokens
   ipcMain.handle('lyra:settings:save', (_, settings) => {
     saveSettings(settings)
     console.log('[SETTINGS] saved')
+    // Proactive daemons re-evaluieren falls toggles geändert wurden
+    try { rescheduleProactiveDaemons() } catch (e) { console.warn('[Proactive] reschedule failed:', e.message) }
     return { ok: true }
   })
 
@@ -249,6 +252,11 @@ export function setupIPC(win, { getSettings, saveSettings, getTokens, saveTokens
   ipcMain.handle('lyra:telemetry:recent', (_e, n = 100) => {
     return { events: readRecentTelemetry(n) }
   })
+
+  // Proactive Daemons — Liste + manueller Test-Trigger + Reschedule nach Settings-Save
+  ipcMain.handle('lyra:proactive:list',  () => ({ daemons: listDaemons() }))
+  ipcMain.handle('lyra:proactive:run',   (_e, id) => runDaemonNow(id))
+  ipcMain.handle('lyra:proactive:reschedule', () => { rescheduleProactiveDaemons(); return { ok: true } })
 
   ipcMain.handle('lyra:cleaner:scan', async () => {
     const settings = getSettings()

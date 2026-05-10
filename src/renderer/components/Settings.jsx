@@ -615,6 +615,23 @@ export default function Settings({ onClose }) {
             </p>
           </div>
 
+          {/* Proaktive Daemons ─────────────────────────────────────── */}
+          <div className="field" style={{ borderTop: '1px solid var(--border)', paddingTop: 16, marginTop: 8 }}>
+            <label style={{ fontSize: 13, fontWeight: 600 }}>Proaktive Erinnerungen</label>
+            <p className="hint">VINCI benachrichtigt dich von selbst — wenn du es willst.</p>
+            <label className="radio-label" style={{ marginTop: 8 }}>
+              <input type="checkbox"
+                checked={local.proactive?.calendarWarning !== false}
+                onChange={e => update('proactive.calendarWarning', e.target.checked)} />
+              <span>Termin-Vorlauf — 15 min vor jedem Kalender-Termin eine Notification</span>
+            </label>
+            <button className="btn-secondary" style={{ marginTop: 8 }}
+              onClick={async () => {
+                const r = await window.lyra.proactiveRun('calendar-warning')
+                alert(r?.ok ? 'Daemon manuell ausgeführt — wenn ein Termin in 12-17 min kommt, kommt die Notification.' : (r?.error || 'Fehler'))
+              }}>Calendar-Warning jetzt testen</button>
+          </div>
+
           {/* Mac-Vault-Migration ─────────────────────────────────────── */}
           <div className="field" style={{ borderTop: '1px solid var(--border)', paddingTop: 16, marginTop: 8 }}>
             <label style={{ fontSize: 13, fontWeight: 600 }}>Mac-Vault-Migration</label>
