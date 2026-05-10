@@ -184,11 +184,20 @@ export async function classifyIntent(message, settings = {}) {
     })
     const t0 = Date.now()
     const res = await model.generateContent(m)
-    const text = res.response.text?.() || ''
-    const parsed = JSON.parse(text)
-    const intent = (parsed.intent || 'multi').toLowerCase()
-    const confidence = Number(parsed.confidence)
+    let text = res.response.text?.() || ''
+    // Robust parsen: code fences strippen, ersten {…} Block extrahieren
+    text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim()
+    const m2 = text.match(/\{[^}]*\}/s)
+    const jsonStr = m2 ? m2[0] : text
     const ms = Date.now() - t0
+    let parsed
+    try { parsed = JSON.parse(jsonStr) }
+    catch (e) {
+      console.warn('[IntentRouter] JSON parse failed for output:', text.slice(0, 100))
+      return { intent: 'multi', confidence: 0, source: 'invalid-json', ms }
+    }
+    const intent = String(parsed.intent || 'multi').toLowerCase()
+    const confidence = Number(parsed.confidence)
 
     if (!INTENTS[intent]) {
       return { intent: 'multi', confidence: 0, source: 'invalid-llm-output', ms }
@@ -210,6 +219,9 @@ export async function classifyIntent(message, settings = {}) {
  */
 export function shortlistTools(classification, threshold = 0.7) {
   if (!classification) return null
+  // Heuristik-Match darf explizit ein Tool-Set setzen (z. B. [] für Greetings),
+  // das hat Vorrang vor der Default-Definition.
+  if (Array.isArray(classification.tools)) return classification.tools
   if (classification.confidence < threshold) return null
   const def = INTENTS[classification.intent]
   if (!def) return null
