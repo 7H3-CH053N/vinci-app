@@ -19,22 +19,44 @@ export const calendarModule = {
 
   actions: {
     getToday:     async () => {
-      // 'eventsToday' kann je nach icalBuddy-Version Bullets unter einem Datums-
-      // Header einrücken UND das Datum bei datetime weglassen (nur Uhrzeit).
-      // Der Parser akzeptiert Bullets unabhängig von der Einrückung und ergänzt
-      // fehlendes Datum aus opts.defaultDate.
       const todayISO = new Date().toISOString().split('T')[0]
-      let raw = await runIcal('eventsToday')
-      if (!parseIcal(raw, { defaultDate: todayISO }).length) {
-        console.log('[Calendar] eventsToday leer → Fallback eventsFrom:today to:today+1')
-        raw = await runIcal('eventsFrom:today to:today+1')
+      // Versuche icalBuddy zuerst (schnell), bei "No calendars" Fallback auf AppleScript
+      try {
+        let raw = await runIcal('eventsToday')
+        if (!parseIcal(raw, { defaultDate: todayISO }).length) {
+          raw = await runIcal('eventsFrom:today to:today+1')
+        }
+        const result = buildResult(raw, { onlyDate: todayISO, defaultDate: todayISO })
+        if (result.termine.length > 0) return result
+        // icalBuddy lieferte kein Event — kein Fallback nötig falls heute wirklich leer
+      } catch (err) {
+        console.log('[Calendar] icalBuddy fehlgeschlagen, Fallback auf AppleScript:', err.message.slice(0, 80))
       }
-      return buildResult(raw, { onlyDate: todayISO, defaultDate: todayISO })
+      // AppleScript-Fallback
+      const events = await getEventsViaAS(0, 1)
+      return buildResultFromASEvents(events, { onlyDate: todayISO })
     },
     getUpcoming:  async ({ days = 3 } = {}) => {
-      const d   = Math.round(Number(days)||3)
-      const raw = await runIcal(`eventsFrom:today to:${dateOffset(d)}`)
-      return buildResult(raw)
+      const d = Math.round(Number(days) || 3)
+      try {
+        const raw = await runIcal(`eventsFrom:today to:${dateOffset(d)}`)
+        const result = buildResult(raw)
+        if (result.termine.length > 0) return result
+      } catch (err) {
+        console.log('[Calendar] icalBuddy fehlgeschlagen, Fallback auf AppleScript:', err.message.slice(0, 80))
+      }
+      const events = await getEventsViaAS(0, d)
+      return buildResultFromASEvents(events)
+    },
+    // Direct-Access-Action für proaktive Daemons + Test
+    getEventsRaw: async ({ daysFromNow = 0, daysAhead = 1 } = {}) => {
+      try {
+        const raw = await runIcal(`eventsFrom:today to:${dateOffset(daysAhead)}`)
+        const parsed = parseIcal(raw)
+        if (parsed.length > 0) return { events: parsed.map(toASEventShape), source: 'icalBuddy' }
+      } catch {}
+      const events = await getEventsViaAS(daysFromNow, daysAhead)
+      return { events, source: 'applescript' }
     },
     getCalendars: async () => {
       await ensureAppRunning('Calendar')
@@ -288,12 +310,12 @@ function buildResult(raw, opts = {}) {
 }
 
 // ── AppleScript runner ─────────────────────────────────────────────────────────
-function runAS(script) {
+function runAS(script, timeoutMs = 15000) {
   return new Promise((resolve,reject) => {
     const f=join(tmpdir(),`vinci-cal-${Date.now()}.applescript`)
     writeFileSync(f,script,'utf8')
-    const timer=setTimeout(()=>{cleanup();reject(new Error('Timeout'))},15000)
-    execFile('osascript',[f],(err,stdout,stderr)=>{
+    const timer=setTimeout(()=>{cleanup();reject(new Error('Timeout'))},timeoutMs)
+    execFile('osascript',[f],{ maxBuffer: 5_000_000 },(err,stdout,stderr)=>{
       clearTimeout(timer);cleanup()
       if(err)return reject(new Error(stderr?.trim()||err.message))
       resolve(stdout.trim())
@@ -314,3 +336,93 @@ function resolveDate(input) {
 function incTime(t,mins){const[h,m]=t.split(':').map(Number),tot=h*60+m+mins;return`${String(Math.floor(tot/60)%24).padStart(2,'0')}:${String(tot%60).padStart(2,'0')}`}
 function esc(s){return(s||'').replace(/\\/g,'\\\\').replace(/"/g,'\\"')}
 function dateOffset(days){const d=new Date();d.setDate(d.getDate()+days);return d.toISOString().split('T')[0]}
+
+// ── AppleScript-Fallback für Calendar-Zugriff ─────────────────────────────────
+// Wird auf modernen macOS-Versionen (>= 26) gebraucht, weil icalBuddy oft
+// "No calendars" returnt obwohl Calendar.app über AppleScript voll zugreifbar ist.
+async function getEventsViaAS(daysFromNow = 0, daysAhead = 1) {
+  const script = `tell application "Calendar"
+  set startD to (current date)
+  set hours of startD to 0
+  set minutes of startD to 0
+  set seconds of startD to 0
+  set startD to startD + (${daysFromNow} * days)
+  set endD to startD + (${daysAhead} * days)
+  set output to ""
+  repeat with cal in calendars
+    try
+      set theEvents to (every event of cal whose start date >= startD and start date < endD)
+      repeat with ev in theEvents
+        set d to start date of ev
+        set yr to (year of d) as string
+        set mo to text -2 thru -1 of ("0" & ((month of d as integer) as string))
+        set dy to text -2 thru -1 of ("0" & ((day of d) as string))
+        set hr to text -2 thru -1 of ("0" & ((hours of d) as string))
+        set mn to text -2 thru -1 of ("0" & ((minutes of d) as string))
+        set isoStr to yr & "-" & mo & "-" & dy & "T" & hr & ":" & mn
+        set output to output & (summary of ev) & "§" & isoStr & "§" & (uid of ev) & "§" & (name of cal) & linefeed
+      end repeat
+    end try
+  end repeat
+  return output
+end tell`
+  const raw = await runAS(script, 12000)
+  const events = []
+  for (const line of (raw || '').split('\n')) {
+    const parts = line.split('§')
+    if (parts.length < 4) continue
+    const [title, iso, uid, calName] = parts
+    if (!title || !iso) continue
+    events.push({
+      title:    title.trim(),
+      start:    iso.trim(),  // ISO ohne Sekunden, ohne TZ — lokale Zeit
+      uid:      (uid || '').trim() || null,
+      calendar: (calName || '').trim()
+    })
+  }
+  return events
+}
+
+// AppleScript-Events → buildResult-kompatibles Format
+function buildResultFromASEvents(events, opts = {}) {
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const WDAY = ['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag']
+  const termine = []
+  const onlyDate = opts.onlyDate
+
+  for (const e of events || []) {
+    const m = e.start.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/)
+    if (!m) continue
+    const [_, y, mo, d, h, mn] = m
+    const dateOnly = `${y}-${mo}-${d}`
+    if (onlyDate && dateOnly !== onlyDate) continue
+    const evDate = new Date(+y, +mo - 1, +d, +h, +mn, 0, 0)
+    if (evDate < now) continue  // vergangene überspringen
+    const dDay = new Date(+y, +mo - 1, +d)
+    const diff = Math.round((dDay - today) / 86400000)
+    const label = diff === 0 ? 'heute' : diff === 1 ? 'morgen' : diff === 2 ? 'übermorgen' : WDAY[dDay.getDay()]
+    const dateStr = dDay.toLocaleDateString('de-AT', { day: 'numeric', month: 'long', year: 'numeric' })
+    const timeStr = `${h}:${mn} Uhr`
+    let entry = `${label} ${dateStr}, ${timeStr}: ${e.title}`
+    if (e.calendar && !SKIP.includes(e.calendar)) entry += ` [${e.calendar}]`
+    termine.push(entry)
+  }
+  return {
+    aktuelle_uhrzeit: now.toLocaleString('de-AT', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }),
+    termine
+  }
+}
+
+// icalBuddy-Event → AppleScript-Event-Shape (für getEventsRaw)
+function toASEventShape(icalEv) {
+  const start = icalEv.allDay
+    ? `${icalEv.startDate}T00:00`
+    : `${icalEv.startDate}T${icalEv.startTime || '00:00'}`
+  return {
+    title:    icalEv.title,
+    start,
+    uid:      icalEv.uid,
+    calendar: '' // icalBuddy mit -nc liefert keinen Calendar-Namen
+  }
+}

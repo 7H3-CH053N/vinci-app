@@ -45,23 +45,23 @@ const DAEMONS = [
     id: 'calendar-warning',
     label: 'Termin-Vorlauf (15 min)',
     description: '15 min vor jedem Termin eine Notification.',
-    schedule: '*/5 * * * *',    // alle 5 min checken
-    cooldownMs: 14 * 60 * 1000, // pro Event nur einmal benachrichtigen
+    schedule: '*/2 * * * *',    // alle 2 min — Calendar-Lookup ist günstig
+    cooldownMs: 20 * 60 * 1000, // pro Event nur einmal in 20 min benachrichtigen
     settingsKey: 'proactive.calendarWarning',
     defaultEnabled: true,
     run: async (ctx) => {
-      const result = await registry.dispatch('calendar_getUpcoming', { days: 1 }, ctx)
-      if (!result || !Array.isArray(result.events || result)) return
-      const events = result.events || result
+      const result = await registry.dispatch('calendar_getEventsRaw', { daysFromNow: 0, daysAhead: 1 }, ctx)
+      if (!result || !Array.isArray(result.events)) return
       const now = Date.now()
-      for (const e of events) {
-        const start = new Date(e.start || e.startDate || e.date).getTime()
+      for (const e of result.events) {
+        // start ist 'YYYY-MM-DDTHH:MM' lokal interpretiert
+        const start = new Date(e.start).getTime()
         if (!start || isNaN(start)) continue
         const minsUntil = Math.round((start - now) / 60000)
-        // Trigger-Fenster: 12-17 min vor Event (toleriert 5-min-Polling)
-        if (minsUntil < 12 || minsUntil > 17) continue
-        const key = e.uid || e.id || `${e.title}-${start}`
-        if (isOnCooldown('calendar-warning', key, 14 * 60_000)) continue
+        // Trigger-Fenster: 10-17 min vor Event (toleriert 2-min-Polling großzügig)
+        if (minsUntil < 10 || minsUntil > 17) continue
+        const key = e.uid || `${e.title}-${start}`
+        if (isOnCooldown('calendar-warning', key, 20 * 60_000)) continue
         markFired('calendar-warning', key)
         const timeStr = new Date(start).toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' })
         notify(`⏰ Termin in ${minsUntil} min`, `${e.title || 'Termin'} um ${timeStr} Uhr`)
