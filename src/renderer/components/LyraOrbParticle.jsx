@@ -179,17 +179,17 @@ export default function LyraOrbParticle({ isSpeaking = false, isThinking = false
       // mind. 75% des verfügbaren Raums füllt. Speed steuert die innere Wirbel-Bewegung.
       switch (state) {
         case 'idle':
-          targetRadius = 32; targetSpeed = 0.5; targetBright = 0.5; targetSize = 0.35
+          targetRadius = 32; targetSpeed = 0.2; targetBright = 0.5; targetSize = 0.35
           targetLineAmount = 0.15; targetElectronRate = 0; break
         case 'listening':
-          targetRadius = 30; targetSpeed = 0.7; targetBright = 0.65; targetSize = 0.4
+          targetRadius = 30; targetSpeed = 0.3; targetBright = 0.65; targetSize = 0.4
           targetLineAmount = 0.4; targetElectronRate = 0; break
         case 'thinking':
-          targetRadius = 26; targetSpeed = 1.0; targetBright = 0.7; targetSize = 0.3
+          targetRadius = 26; targetSpeed = 0.5; targetBright = 0.7; targetSize = 0.3
           targetLineAmount = 1.0; targetElectronRate = 0.015; break
         case 'speaking':
-          // Radial breathing + starke innere Wirbel — orb wirkt elektrisch geladen
-          targetRadius = 30; targetSpeed = 1.2; targetBright = 0.75; targetSize = 0.45
+          // Radial breathing + 3D-Curl-Wirbel ohne Z-Achsen-Bias
+          targetRadius = 30; targetSpeed = 1.0; targetBright = 0.75; targetSize = 0.45
           targetLineAmount = 1.0; targetElectronRate = 0; break
       }
 
@@ -272,22 +272,29 @@ export default function LyraOrbParticle({ isSpeaking = false, isThinking = false
         const x = a[i3], y = a[i3+1], z = a[i3+2]
         const px = phase[i]
 
-        // ── Innere Bewegung (sichtbar pro Partikel, JARVIS-Stil) ──
-        // 1) Schnelle Brownian-Noise — höhere Frequenz + Amplitude als vorher (kein 16s-Trägheit)
-        vel[i3]   += Math.sin(t * 1.5 + px)        * 0.005 * currentSpeed
-        vel[i3+1] += Math.cos(t * 1.7 + px * 1.3)  * 0.005 * currentSpeed
-        vel[i3+2] += Math.sin(t * 1.6 + px * 0.7)  * 0.005 * currentSpeed
-        // 2) Position-koppelnde Curl-ähnliche Komponente — Strömung statt einfaches Rauschen
-        vel[i3]   += Math.sin(y * 0.18 + t * 0.8 + px * 0.4) * 0.004 * currentSpeed
-        vel[i3+1] += Math.cos(z * 0.18 + t * 0.9 + px * 0.6) * 0.004 * currentSpeed
-        vel[i3+2] += Math.sin(x * 0.18 + t * 0.85 + px * 0.5) * 0.004 * currentSpeed
-        // 3) Tangentiale Swirl — Partikel rotieren langsam um die Orb-Achse
-        //    (per-Partikel-Phase verhindert Lockstep, sieht nach Plasma-Wirbel aus)
-        const swirlMag = 0.0006 * currentSpeed
-        const swirlPhase = Math.sin(px * 0.7) * 0.5 + 0.5  // 0..1 pro Partikel
-        vel[i3]   += -y * swirlMag * (0.5 + swirlPhase)
-        vel[i3+1] +=  x * swirlMag * (0.5 + swirlPhase)
-        vel[i3+2] += Math.sin(t * 0.4 + px) * swirlMag * 8
+        // ── Innere Bewegung — 3D-Curl-Noise, gleichmäßig auf allen Achsen ──
+        // Ursprünglicher Code (Brownian noise) zurück mit moderaten Werten — Idle/Thinking
+        // funktionieren damit wie vorher. Beim Sprechen kommt zusätzlich curl dazu.
+        vel[i3]   += Math.sin(t * 0.05 + px)        * 0.001 * currentSpeed
+        vel[i3+1] += Math.cos(t * 0.06 + px * 1.3)  * 0.001 * currentSpeed
+        vel[i3+2] += Math.sin(t * 0.055 + px * 0.7) * 0.001 * currentSpeed
+        vel[i3]   += Math.sin(t * 0.02 + px * 2.1 + y * 0.1) * 0.0008 * currentSpeed
+        vel[i3+1] += Math.cos(t * 0.025 + px * 1.7 + z * 0.1) * 0.0008 * currentSpeed
+        vel[i3+2] += Math.sin(t * 0.022 + px * 0.9 + x * 0.1) * 0.0008 * currentSpeed
+        // Speaking-Extra: 3D-Curl, perfekt isotrop (alle Achsen gleichberechtigt, kein Ring)
+        if (state === 'speaking') {
+          // Curl-Noise: cross-product-artige Komponenten — divergenzfrei, kein radial-Drift
+          const fx = Math.sin(y * 0.15 + t * 1.2 + px * 0.3)
+          const fy = Math.cos(z * 0.15 + t * 1.3 + px * 0.7)
+          const fz = Math.sin(x * 0.15 + t * 1.1 + px * 0.5)
+          vel[i3]   += (fy - fz) * 0.006
+          vel[i3+1] += (fz - fx) * 0.006
+          vel[i3+2] += (fx - fy) * 0.006
+          // Plus schnelle Mikro-Vibration
+          vel[i3]   += Math.sin(t * 6 + px * 3.1) * 0.003
+          vel[i3+1] += Math.cos(t * 6.5 + px * 2.7) * 0.003
+          vel[i3+2] += Math.sin(t * 7 + px * 3.5) * 0.003
+        }
 
         const dist = Math.sqrt(x*x + y*y + z*z) || 0.01
         // Pull-back ist im Speaking-Modus deutlich stärker — verhindert Wall-Crash
