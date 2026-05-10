@@ -39,9 +39,12 @@ function notify(title, body, opts = {}) {
     })
     n.show()
   }
-  // In-Chat-Inject + TTS (analog zum Briefing-Pfad)
+  // In-Chat-Inject + TTS (analog zum Briefing-Pfad).
+  // Window MUSS sichtbar sein, sonst sieht der User die Chat-Message nicht
+  // und manche TTS-Pipelines pausieren bei hidden window.
   if (mainWindow && !mainWindow.isDestroyed()) {
     const text = opts.spokenText || `${title.replace(/^[^\w]+\s*/, '')}: ${body}`
+    if (!mainWindow.isVisible()) mainWindow.show()
     mainWindow.webContents.send('lyra:proactive', {
       text,
       module: opts.module || 'reminders'
