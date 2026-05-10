@@ -27,16 +27,26 @@ function markFired(id, key) {
 }
 
 function notify(title, body, opts = {}) {
-  if (!Notification.isSupported()) return
-  const n = new Notification({ title, body, silent: opts.silent ?? false })
-  n.on('click', () => {
-    if (mainWindow) {
-      mainWindow.show()
-      mainWindow.focus()
-      if (opts.openTab) mainWindow.webContents.send('lyra:openTab', opts.openTab)
-    }
-  })
-  n.show()
+  // Native macOS Notification
+  if (Notification.isSupported()) {
+    const n = new Notification({ title, body, silent: opts.silent ?? false })
+    n.on('click', () => {
+      if (mainWindow) {
+        mainWindow.show()
+        mainWindow.focus()
+        if (opts.openTab) mainWindow.webContents.send('lyra:openTab', opts.openTab)
+      }
+    })
+    n.show()
+  }
+  // In-Chat-Inject + TTS (analog zum Briefing-Pfad)
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    const text = opts.spokenText || `${title.replace(/^[^\w]+\s*/, '')}: ${body}`
+    mainWindow.webContents.send('lyra:proactive', {
+      text,
+      module: opts.module || 'reminders'
+    })
+  }
 }
 
 // ── Daemon-Definitionen ─────────────────────────────────────────────────────────
@@ -64,8 +74,16 @@ const DAEMONS = [
         if (isOnCooldown('calendar-warning', key, 20 * 60_000)) continue
         markFired('calendar-warning', key)
         const timeStr = new Date(start).toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' })
-        notify(`⏰ Termin in ${minsUntil} min`, `${e.title || 'Termin'} um ${timeStr} Uhr`)
-        logEvent('daemon_fired', { daemon: 'calendar-warning', key, title: (e.title || '').slice(0, 80) })
+        const title = e.title || 'Termin'
+        notify(
+          `⏰ Termin in ${minsUntil} min`,
+          `${title} um ${timeStr} Uhr`,
+          {
+            module: 'reminders',
+            spokenText: `Alex, in ${minsUntil} Minuten hast du einen Termin: ${title} um ${timeStr} Uhr.`
+          }
+        )
+        logEvent('daemon_fired', { daemon: 'calendar-warning', key, title: title.slice(0, 80) })
       }
     }
   }

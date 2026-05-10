@@ -51,7 +51,14 @@ export default function App() {
     const offAbout    = window.lyra.on('lyra:openAbout',    () => setView('about'))
     const offTasks    = window.lyra.on('lyra:openTasks',    () => setView('tasks'))
     const offTaskRes  = window.lyra.on('lyra:openTaskResult', () => setView('tasks'))
-    return () => { offBriefing?.(); offSettings?.(); offAbout?.(); offTasks?.(); offTaskRes?.() }
+    // Proaktive Daemons (Phase J4): Termin-Reminder etc. erscheinen im Chat + werden gesprochen
+    const offProactive = window.lyra.on('lyra:proactive', ({ text, module }) => {
+      if (!text) return
+      addMessage({ role: 'assistant', content: text })
+      speak(text, { module: module || 'reminders' })
+      setChatOpen(true)
+    })
+    return () => { offBriefing?.(); offSettings?.(); offAbout?.(); offTasks?.(); offTaskRes?.(); offProactive?.() }
   }, [speak, addMessage, setView])
 
   function toggleChat() {
