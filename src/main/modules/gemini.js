@@ -5,6 +5,7 @@ import { registry } from './registry.js'
 import { logEvent } from './telemetry.js'
 import { routeIntent } from './_intentRouter.js'
 import { buildSituationContext, recordTurn } from './_situationContext.js'
+import { evalAndDecide } from './_selfEval.js'
 
 const SYSTEM_PROMPT = `Du bist VINCI, der persönliche KI-Assistent von Alex Januschewsky (Prompt Rocker).
 Alex ist Managing Director von medienwerk KG und KI-Berater in Salzburg.
@@ -522,26 +523,39 @@ export async function geminiChat({ message, history = [], apiKey, model, onToolC
   const primary  = model || 'gemini-2.5-flash'
   const fallback = settings.geminiFallbackModel || 'gemini-2.5-flash'
 
-  // Wrapper der den Turn nach erfolgreichem Antworten aufzeichnet (für Phase J3 Session-Memory)
-  const recordOnSuccess = (text) => {
+  // Phase J3: Turn aufzeichnen + Phase J5: Self-Eval (async, nicht-blockierend für UX)
+  const finalize = (text) => {
+    // Self-Eval läuft fire-and-forget — verzögert nicht die User-Antwort
+    if (settings.selfEval !== 'off' && text) {
+      const mode = settings.selfEval || 'complex-only'
+      evalAndDecide({
+        question: message,
+        answer: text,
+        settings: { ...settings, selfEvalMode: mode }
+      }).then(decision => {
+        if (!decision.skipped && decision.score < 0.6) {
+          console.warn(`[SelfEval] score=${decision.score.toFixed(2)} - "${decision.reason}" - fix: ${decision.fix}`)
+        }
+      }).catch(err => console.warn('[SelfEval] threw:', err.message))
+    }
     try { recordTurn({ userMessage: message, assistantText: text, intent: routedIntent }) } catch {}
     return text
   }
 
   try {
-    return recordOnSuccess(await runWith(primary))
+    return finalize(await runWith(primary))
   } catch (err1) {
     if (!shouldRetry(err1)) throw err1
     const reason = isOverload(err1) ? 'overload' : 'network error'
     console.warn(`[Gemini] ${primary} ${reason} — retry in 1s (${err1.message})`)
     await sleep(1000)
     try {
-      return recordOnSuccess(await runWith(primary))
+      return finalize(await runWith(primary))
     } catch (err2) {
       if (!shouldRetry(err2)) throw err2
       if (fallback && fallback !== primary) {
         console.warn(`[Gemini] ${primary} weiter Probleme — Fallback auf ${fallback}`)
-        return recordOnSuccess(await runWith(fallback))
+        return finalize(await runWith(fallback))
       }
       throw err2
     }
