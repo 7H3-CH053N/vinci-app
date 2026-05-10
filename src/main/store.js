@@ -12,8 +12,9 @@ const DEFAULT_SETTINGS = {
   briefingTime: '06:30',
   aiProvider: 'gemini',      // 'gemini' | 'ollama'
   geminiApiKey: '',
-  geminiModel: 'gemini-2.5-pro',            // Default – beste Tool-Calling-Accuracy, weniger Empty-STOP-Quirks
+  geminiModel: 'gemini-2.5-pro',            // Default-Pro: beste Tool-Calling-Accuracy, weniger Empty-STOP-Quirks
   geminiFallbackModel: 'gemini-2.5-flash',  // Bei 503/Overload: schneller Fallback (akzeptable Qualität)
+  smartRouting: true,                        // Phase J2: triviale Queries gehen auf Flash, Standard+Komplex auf Pro
   ollamaModel: 'gemma4',
   ollamaUrl: 'http://localhost:11434',
   memoryWorkerModel: 'gemma3:4b',

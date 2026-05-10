@@ -18,6 +18,7 @@ import { ollamaChat } from './modules/ollama.js'
 import { registry } from './modules/registry.js'
 import { logEvent, readRecent as readRecentTelemetry } from './modules/telemetry.js'
 import { geminiChat } from './modules/gemini.js'
+import { routeAndLog } from './modules/_modelRouter.js'
 import { triggerBriefing } from './scheduler.js'
 import * as edgeTTS from './modules/edgeTTS.js'
 import * as homeassistant from './modules/homeassistant.js'
@@ -123,12 +124,13 @@ export function setupIPC(win, { getSettings, saveSettings, getTokens, saveTokens
           })
         }
       } else {
-        console.log('[CHAT] Using Gemini:', settings.geminiModel)
         if (!settings.geminiApiKey) return { error: 'Kein Gemini API Key. Bitte in Einstellungen (⚙) eintragen.' }
+        const routed = routeAndLog(message, settings)
+        console.log('[CHAT] Using Gemini:', routed.model, `(${routed.reason})`)
         response = await geminiChat({
           message, history,
           apiKey:        settings.geminiApiKey,
-          model:         settings.geminiModel,
+          model:         routed.model,
           moduleContext: registry.getContext(),
           onToolCall:    toolDispatcher,
           settings
