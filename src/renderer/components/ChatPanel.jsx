@@ -41,17 +41,10 @@ export default function ChatPanel() {
         addMessage({ role: 'assistant', content: `⚠ ${result.error}`, isError: true })
       } else {
         addMessage({ role: 'assistant', content: result.text })
-        // Don't speak very long responses or list-like content (reminders lists etc)
-        // For long responses: speak only first 2 sentences (summary)
-        let textToSpeak = result.text || ''
-        if (textToSpeak.length > 400) {
-          // Extract first 1-2 sentences as spoken summary
-          const sentences = textToSpeak.match(/[^.!?]+[.!?]+/g) || []
-          textToSpeak = sentences.slice(0, 2).join(' ').trim()
-        }
-        const shouldSpeak = textToSpeak.length > 0
-        // Modul-Tag: wenn die Backend-Antwort eine bekannte Quelle hat, nutzen wir die.
-        // Sonst Default 'chat'. (Granulares Tool-Tagging kommt im nächsten Schritt.)
+        // Vollständigen Text sprechen — keine Truncation mehr
+        const textToSpeak = result.text || ''
+        const shouldSpeak = textToSpeak.trim().length > 0
+        // Modul-Tag: vom Backend (Intent-Router) propagiert. Fallback 'chat'.
         const mod = result.module || 'chat'
         if (shouldSpeak) speak(textToSpeak, { module: mod })
       }

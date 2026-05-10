@@ -37,6 +37,9 @@ export function resetSession() {
   sessionStartTs = Date.now()
 }
 
+// Letzten klassifizierten Intent abfragen — wird von ipc.js für TTS-Module-Tagging verwendet
+export function getLastIntent() { return lastIntent }
+
 // ── Tageszeit-Phase ────────────────────────────────────────────────────────────
 function timeOfDay(d = new Date()) {
   const h = d.getHours()

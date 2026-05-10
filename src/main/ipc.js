@@ -17,6 +17,7 @@ import { scheduleMemoryConsolidation } from './modules/memoryWorker.js'
 import { ollamaChat } from './modules/ollama.js'
 import { registry } from './modules/registry.js'
 import { logEvent, readRecent as readRecentTelemetry } from './modules/telemetry.js'
+import { getLastIntent } from './modules/_situationContext.js'
 import { listDaemons, runDaemonNow, rescheduleAll as rescheduleProactiveDaemons } from './modules/_proactiveDaemons.js'
 import { geminiChat } from './modules/gemini.js'
 import { routeAndLog } from './modules/_modelRouter.js'
@@ -148,7 +149,16 @@ export function setupIPC(win, { getSettings, saveSettings, getTokens, saveTokens
       // Background-Worker: Fakten aus Konversation extrahieren (debounced).
       // Bei webTainted-Antworten überspringt der Worker sie automatisch.
       scheduleMemoryConsolidation()
-      return { text: response }
+      // Intent → TTS-Modul-Key mappen (1:1 für die meisten, multi/unbekannt → 'chat')
+      const intent = getLastIntent()
+      const TTS_MODULE_BY_INTENT = {
+        calendar: 'calendar', reminders: 'reminders', mail: 'mail', messages: 'messages',
+        contacts: 'contacts', weather: 'weather', news: 'news', web: 'web',
+        obsidian: 'obsidian', homeassistant: 'homeassistant', system: 'system',
+        strom: 'strom', n8n: 'n8n', blog: 'obsidian', memory: 'obsidian'
+      }
+      const ttsModule = TTS_MODULE_BY_INTENT[intent] || 'chat'
+      return { text: response, module: ttsModule }
     } catch (err) {
       console.error('[CHAT ERR]', err.message)
       return { error: err.message }
