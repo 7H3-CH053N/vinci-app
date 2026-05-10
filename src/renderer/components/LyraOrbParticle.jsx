@@ -144,9 +144,9 @@ export default function LyraOrbParticle({ isSpeaking = false, isThinking = false
     // Camera-Distanz wird so gewählt dass die maximale Partikel-Ausdehnung (HARD_MAX_R)
     // immer mit ~10px Rand zum Container passt — egal ob Fenster groß/klein,
     // Chat offen/zu. So kommt der Orb nie über die Fensterränder.
-    const HARD_MAX_R = 40      // Hard-Cap für Partikel-Distanz (nahe an idle-radius damit orb groesser wirkt)
+    const HARD_MAX_R = 44      // Hard-Cap mit Headroom für dramatischere Audio-Pulse
     const VIEWPORT_MARGIN_PX = 10
-    const CAMERA_DRIFT = 4     // Compensate für camera.position.x/y oscillation in animate()
+    const CAMERA_DRIFT = 4
 
     function resize() {
       const w = wrap.clientWidth || 1
@@ -188,8 +188,9 @@ export default function LyraOrbParticle({ isSpeaking = false, isThinking = false
           targetRadius = 26; targetSpeed = 0.5; targetBright = 0.7; targetSize = 0.3
           targetLineAmount = 1.0; targetElectronRate = 0.015; break
         case 'speaking':
-          targetRadius = 30; targetSpeed = 0.2; targetBright = 0.7; targetSize = 0.4
-          targetLineAmount = 0.8; targetElectronRate = 0; break
+          // Radial breathing on top: bass pumpt currentRadius ±3 — orb atmet sichtbar
+          targetRadius = 30; targetSpeed = 0.45; targetBright = 0.75; targetSize = 0.45
+          targetLineAmount = 1.0; targetElectronRate = 0; break
       }
 
       currentRadius += (targetRadius - currentRadius) * 0.02
@@ -198,6 +199,9 @@ export default function LyraOrbParticle({ isSpeaking = false, isThinking = false
       currentSize   += (targetSize   - currentSize)   * 0.02
       lineAmount    += (targetLineAmount - lineAmount) * 0.02
       electronSpawnRate += (targetElectronRate - electronSpawnRate) * 0.02
+
+      // SPEAKING: radial breathing — currentRadius pumpt mit bass live
+      // (wird unten in audio-Bereich addiert nach bass-Berechnung)
 
       // Audio-Reaktivität: echter AnalyserNode wenn verfügbar (Edge TTS),
       // sonst synthetisierte Pulse beim Sprechen.
@@ -218,12 +222,17 @@ export default function LyraOrbParticle({ isSpeaking = false, isThinking = false
         bass = bSum / (bassEnd * 255)
         mid  = mSum / ((midEnd - bassEnd) * 255)
       } else if (state === 'speaking') {
+        // Synthetisch dramatischer simulieren wenn kein AnalyserNode da ist (System-TTS)
         const w1 = Math.sin(t * 6.0) * 0.5 + 0.5
         const w2 = Math.sin(t * 9.3 + 1.7) * 0.5 + 0.5
         const w3 = Math.sin(t * 13.1 + 3.4) * 0.5 + 0.5
-        bass = (w1 * 0.6 + w2 * 0.3 + w3 * 0.1) * 0.7
-        mid  = (w2 * 0.5 + w3 * 0.5) * 0.6
+        const w4 = Math.sin(t * 4.2 + 0.5) * 0.5 + 0.5  // langsame Welle für radial breathing
+        bass = (w1 * 0.6 + w4 * 0.4) * 0.95  // staerker
+        mid  = (w2 * 0.5 + w3 * 0.5) * 0.85
       }
+
+      // Radial breathing: currentRadius pulsiert sichtbar mit bass beim Sprechen
+      const breatheRadius = state === 'speaking' ? currentRadius + bass * 4 : currentRadius
 
       // Transition tumble
       if (state !== lastState) { transitionEnergy = 1.0; lastState = state }
@@ -264,21 +273,31 @@ export default function LyraOrbParticle({ isSpeaking = false, isThinking = false
         vel[i3+2] += Math.sin(t * 0.022 + px * 0.9 + x * 0.1) * 0.0008 * currentSpeed
 
         const dist = Math.sqrt(x*x + y*y + z*z) || 0.01
-        const pull = Math.max(0, dist - currentRadius) * 0.002 + 0.0003
+        // Pull-back nutzt breatheRadius im Speaking-Modus → orb atmet sichtbar mit bass
+        const pull = Math.max(0, dist - breatheRadius) * 0.002 + 0.0003
         vel[i3]   -= (x / dist) * pull
         vel[i3+1] -= (y / dist) * pull
         vel[i3+2] -= (z / dist) * pull
 
-        // Audio-reaktive Pulse beim Sprechen
+        // Audio-reaktive Pulse beim Sprechen — kraftvoll, JARVIS-Stil
         if (bass > 0.05) {
-          vel[i3]   += (x / dist) * bass * 0.02
-          vel[i3+1] += (y / dist) * bass * 0.02
-          vel[i3+2] += (z / dist) * bass * 0.02
+          // Bass = radiale Schock-Pulse (3× stärker als vorher)
+          vel[i3]   += (x / dist) * bass * 0.06
+          vel[i3+1] += (y / dist) * bass * 0.06
+          vel[i3+2] += (z / dist) * bass * 0.06
         }
         if (state === 'speaking' && mid > 0.1) {
+          // Mid = Pro-Partikel-Shimmer (2× stärker, alle Achsen)
           const pulse = Math.sin(t * 8 + px)
-          vel[i3]   += (x / dist) * mid * 0.012 * pulse
-          vel[i3+1] += (y / dist) * mid * 0.012 * pulse
+          vel[i3]   += (x / dist) * mid * 0.025 * pulse
+          vel[i3+1] += (y / dist) * mid * 0.025 * pulse
+          vel[i3+2] += (z / dist) * mid * 0.018 * pulse
+        }
+        // Brownian micro-jitter beim Sprechen — orb wirkt "elektrisch geladen"
+        if (state === 'speaking') {
+          vel[i3]   += (Math.random() - 0.5) * bass * 0.04
+          vel[i3+1] += (Math.random() - 0.5) * bass * 0.04
+          vel[i3+2] += (Math.random() - 0.5) * bass * 0.04
         }
 
         vel[i3]   *= 0.992
@@ -327,7 +346,8 @@ export default function LyraOrbParticle({ isSpeaking = false, isThinking = false
         }
         lineGeo.setDrawRange(0, lineCount * 2)
         lineGeo.attributes.position.needsUpdate = true
-        lineMat.opacity = lineAmount * 0.12
+        // Linien-Opacity surge mit bass — Verbindungen "leuchten" auf bei jedem Klang
+        lineMat.opacity = lineAmount * (0.12 + bass * 0.35)
 
         // Active connections für Electron-Spawn (max 500)
         activeConnections.length = 0
@@ -373,8 +393,9 @@ export default function LyraOrbParticle({ isSpeaking = false, isThinking = false
       electronGeo.attributes.position.needsUpdate = true
 
       // ── Visuals (mit Audio-Reaktivität) ──
-      mat.opacity = currentBright + bass * 0.08
-      mat.size = currentSize + bass * 0.05
+      // Particle-Opacity + Size pulsen kraftvoll mit bass beim Sprechen
+      mat.opacity = currentBright + bass * 0.25 + (state === 'speaking' ? mid * 0.15 : 0)
+      mat.size = currentSize + bass * 0.18
 
       // Linien-Reichweite wächst mit bass — mehr Verbindungen beim Sprech-Peak
       // (in der Loop selbst wird maxDist nicht dynamisch verwendet, daher hier
