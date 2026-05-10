@@ -15,6 +15,7 @@ const DEFAULT_SETTINGS = {
   geminiModel: 'gemini-2.5-pro',            // Default-Pro: beste Tool-Calling-Accuracy, weniger Empty-STOP-Quirks
   geminiFallbackModel: 'gemini-2.5-flash',  // Bei 503/Overload: schneller Fallback (akzeptable Qualität)
   smartRouting: true,                        // Phase J2: triviale Queries gehen auf Flash, Standard+Komplex auf Pro
+  intentRouting: true,                       // Phase J1: Tool-Shortlist via Intent-Klassifikation (massiv weniger Tokens, höhere Tool-Accuracy)
   proactive: {                               // Phase J4: Hintergrund-Daemons für proaktive Notifications
     calendarWarning: true,                   // 15 min vor Termin
     stromAnomaly: true,                      // aktueller Watt > Schwellwert

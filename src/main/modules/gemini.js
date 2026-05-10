@@ -3,6 +3,7 @@ import { getInventoryContext as getHAInventoryContext } from './homeassistant.js
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { registry } from './registry.js'
 import { logEvent } from './telemetry.js'
+import { routeIntent } from './_intentRouter.js'
 
 const SYSTEM_PROMPT = `Du bist VINCI, der persönliche KI-Assistent von Alex Januschewsky (Prompt Rocker).
 Alex ist Managing Director von medienwerk KG und KI-Berater in Salzburg.
@@ -247,7 +248,29 @@ function detectForcedTools(msg, { haTriggered } = {}) {
 export async function geminiChat({ message, history = [], apiKey, model, onToolCall, settings = {} }) {
   const genAI = new GoogleGenerativeAI(apiKey)
 
-  const tools = registry.getTools()
+  // Phase J1: Intent-Routing → Tool-Shortlist statt aller Tools
+  const allTools = registry.getTools()
+  let tools = allTools
+  if (settings.intentRouting !== false) {
+    try {
+      const routed = await routeIntent(message, settings)
+      if (Array.isArray(routed.tools)) {
+        if (routed.tools.length === 0) {
+          // Begrüßung/Ack — gar keine Tools
+          tools = []
+        } else {
+          // Filter auf Shortlist
+          const allowed = new Set(routed.tools)
+          tools = allTools.filter(t => allowed.has(t.name))
+        }
+        console.log(`[Gemini] Intent: ${routed.intent} (${routed.source}, ${(routed.confidence * 100).toFixed(0)}%) → ${tools.length}/${allTools.length} tools`)
+      } else {
+        console.log(`[Gemini] Intent: ${routed.intent} (${routed.source}, low conf) → alle ${allTools.length} tools`)
+      }
+    } catch (err) {
+      console.warn('[Gemini] Intent-Routing failed, fallback auf alle Tools:', err.message)
+    }
+  }
 
   const now = new Date()
   const dateStr = now.toLocaleDateString('de-AT', { weekday:'long', day:'numeric', month:'long', year:'numeric' })
