@@ -16,7 +16,11 @@ const DEFAULT_SETTINGS = {
   geminiFallbackModel: 'gemini-2.5-flash',  // Bei 503/Overload: schneller Fallback (akzeptable Qualität)
   smartRouting: true,                        // Phase J2: triviale Queries gehen auf Flash, Standard+Komplex auf Pro
   proactive: {                               // Phase J4: Hintergrund-Daemons für proaktive Notifications
-    calendarWarning: true                    // 15 min vor Termin
+    calendarWarning: true,                   // 15 min vor Termin
+    stromAnomaly: true,                      // aktueller Watt > Schwellwert
+    stromThresholdW: 2500,                   // ab wie vielen Watt eine Anomalie ist
+    vaultDrift: true,                        // wöchentlich Posts-ohne-Wikilinks-Check
+    quarantineReminder: true                 // wöchentlich _quarantine/ älter als 14 Tage
   },
   ollamaModel: 'gemma4',
   ollamaUrl: 'http://localhost:11434',

@@ -7,6 +7,8 @@
 
 import cron from 'node-cron'
 import { Notification } from 'electron'
+import { existsSync, readdirSync, readFileSync, statSync } from 'fs'
+import { join } from 'path'
 import { registry } from './registry.js'
 import { logEvent } from './telemetry.js'
 
@@ -62,35 +64,166 @@ const DAEMONS = [
     cooldownMs: 20 * 60 * 1000, // pro Event nur einmal in 20 min benachrichtigen
     settingsKey: 'proactive.calendarWarning',
     defaultEnabled: true,
-    run: async (ctx) => {
-      const result = await registry.dispatch('calendar_getEventsRaw', { daysFromNow: 0, daysAhead: 1 }, ctx)
-      if (!result || !Array.isArray(result.events)) return
-      const now = Date.now()
-      for (const e of result.events) {
-        // start ist 'YYYY-MM-DDTHH:MM' lokal interpretiert
-        const start = new Date(e.start).getTime()
-        if (!start || isNaN(start)) continue
-        const minsUntil = Math.round((start - now) / 60000)
-        // Trigger-Fenster: 10-17 min vor Event (toleriert 2-min-Polling großzügig)
-        if (minsUntil < 10 || minsUntil > 17) continue
-        const key = e.uid || `${e.title}-${start}`
-        if (isOnCooldown('calendar-warning', key, 20 * 60_000)) continue
-        markFired('calendar-warning', key)
-        const timeStr = new Date(start).toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' })
-        const title = e.title || 'Termin'
-        notify(
-          `⏰ Termin in ${minsUntil} min`,
-          `${title} um ${timeStr} Uhr`,
-          {
-            module: 'reminders',
-            spokenText: `Alex, in ${minsUntil} Minuten hast du einen Termin: ${title} um ${timeStr} Uhr.`
-          }
-        )
-        logEvent('daemon_fired', { daemon: 'calendar-warning', key, title: title.slice(0, 80) })
+    run: runCalendarWarning
+  },
+  {
+    id: 'strom-anomaly',
+    label: 'Strom-Anomalie',
+    description: 'Wenn der aktuelle Verbrauch über deinem Schwellwert liegt.',
+    schedule: '*/15 8-22 * * *',   // alle 15 min, nur tagsüber
+    cooldownMs: 60 * 60 * 1000,    // 1h Cooldown
+    settingsKey: 'proactive.stromAnomaly',
+    defaultEnabled: true,
+    run: runStromAnomaly
+  },
+  {
+    id: 'vault-drift',
+    label: 'Vault-Drift wöchentlich',
+    description: 'Sonntags 18:00: prüft ob Blog-Posts ohne Wikilinks im Vault liegen.',
+    schedule: '0 18 * * 0',        // Sonntag 18:00
+    cooldownMs: 6 * 24 * 60 * 60 * 1000, // 6 Tage Cooldown (effektiv 1×/Woche)
+    settingsKey: 'proactive.vaultDrift',
+    defaultEnabled: true,
+    run: runVaultDrift
+  },
+  {
+    id: 'quarantine-reminder',
+    label: 'Quarantäne-Reminder',
+    description: 'Sonntags 18:30: erinnert dich an Inhalte in _quarantine/ die >14 Tage alt sind.',
+    schedule: '30 18 * * 0',
+    cooldownMs: 6 * 24 * 60 * 60 * 1000,
+    settingsKey: 'proactive.quarantineReminder',
+    defaultEnabled: true,
+    run: runQuarantineReminder
+  }
+]
+
+// ── Daemon-Implementierungen ────────────────────────────────────────────────────
+
+async function runCalendarWarning(ctx) {
+  const result = await registry.dispatch('calendar_getEventsRaw', { daysFromNow: 0, daysAhead: 1 }, ctx)
+  if (!result || !Array.isArray(result.events)) return
+  const now = Date.now()
+  for (const e of result.events) {
+    const start = new Date(e.start).getTime()
+    if (!start || isNaN(start)) continue
+    const minsUntil = Math.round((start - now) / 60000)
+    if (minsUntil < 10 || minsUntil > 17) continue
+    const key = e.uid || `${e.title}-${start}`
+    if (isOnCooldown('calendar-warning', key, 20 * 60_000)) continue
+    markFired('calendar-warning', key)
+    const timeStr = new Date(start).toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' })
+    const title = e.title || 'Termin'
+    notify(
+      `⏰ Termin in ${minsUntil} min`,
+      `${title} um ${timeStr} Uhr`,
+      {
+        module: 'reminders',
+        spokenText: `Alex, in ${minsUntil} Minuten hast du einen Termin: ${title} um ${timeStr} Uhr.`
+      }
+    )
+    logEvent('daemon_fired', { daemon: 'calendar-warning', key, title: title.slice(0, 80) })
+  }
+}
+
+async function runStromAnomaly(ctx) {
+  const settings = ctx?.settings || {}
+  const thresholdW = Math.max(500, settings.proactive?.stromThresholdW || 2500)
+  const result = await registry.dispatch('strom_getCurrent', {}, ctx)
+  if (!result || result.available === false) return
+  const currentW = Number(result.current_w || 0)
+  if (!currentW || currentW < thresholdW) return
+  const key = `over-${Math.floor(Date.now() / (60 * 60_000))}` // Stunden-Granularität
+  if (isOnCooldown('strom-anomaly', key, 60 * 60_000)) return
+  markFired('strom-anomaly', key)
+  const kw = (currentW / 1000).toFixed(1)
+  notify(
+    `⚡ Strom-Anomalie`,
+    `Aktuell ${kw} kW (Schwelle ${(thresholdW/1000).toFixed(1)} kW). Etwas eingeschaltet?`,
+    {
+      module: 'strom',
+      spokenText: `Achtung Alex, der Stromverbrauch ist gerade auf ${kw} Kilowatt — über deinem Schwellwert von ${(thresholdW/1000).toFixed(1)}.`
+    }
+  )
+  logEvent('daemon_fired', { daemon: 'strom-anomaly', currentW, thresholdW })
+}
+
+async function runVaultDrift(ctx) {
+  const vault = ctx?.settings?.obsidian?.vaultPath
+  if (!vault) return
+  const sources = (ctx?.settings?.blogSources || []).filter(s => s.enabled)
+  let postsWithoutMentions = 0
+  let totalChecked = 0
+  for (const source of sources) {
+    const dir = join(vault, source.vaultFolder)
+    if (!existsSync(dir)) continue
+    let files
+    try { files = readdirSync(dir).filter(f => f.endsWith('.md')) } catch { continue }
+    for (const f of files) {
+      totalChecked++
+      try {
+        const head = readFileSync(join(dir, f), 'utf8').slice(0, 2000)
+        // mentions: [] oder kein mentions-Feld → drift-kandidat
+        const m = head.match(/^mentions:\s*\[(.*?)\]/m)
+        if (!m || m[1].trim() === '') postsWithoutMentions++
+      } catch {}
+    }
+  }
+  if (postsWithoutMentions < 3) return
+  const key = `drift-${new Date().toISOString().slice(0,10)}`
+  if (isOnCooldown('vault-drift', key, 6 * 24 * 60 * 60_000)) return
+  markFired('vault-drift', key)
+  notify(
+    `📚 Vault-Drift erkannt`,
+    `${postsWithoutMentions} von ${totalChecked} Posts ohne Wikilinks. Body-Pass laufen lassen?`,
+    {
+      module: 'obsidian',
+      spokenText: `Alex, ${postsWithoutMentions} Blog-Posts haben noch keine Wikilinks. Magst du den Body-Pass laufen lassen?`
+    }
+  )
+  logEvent('daemon_fired', { daemon: 'vault-drift', postsWithoutMentions, totalChecked })
+}
+
+async function runQuarantineReminder(ctx) {
+  const vault = ctx?.settings?.obsidian?.vaultPath
+  if (!vault) return
+  const quarDir = join(vault, 'VINCI', '_quarantine')
+  if (!existsSync(quarDir)) return
+  let oldestAge = 0
+  let totalFiles = 0
+  function walk(dir) {
+    let entries
+    try { entries = readdirSync(dir, { withFileTypes: true }) } catch { return }
+    for (const e of entries) {
+      if (e.name.startsWith('.')) continue
+      const full = join(dir, e.name)
+      if (e.isDirectory()) walk(full)
+      else if (e.isFile()) {
+        try {
+          const st = statSync(full)
+          totalFiles++
+          const age = Date.now() - st.mtimeMs
+          if (age > oldestAge) oldestAge = age
+        } catch {}
       }
     }
   }
-]
+  walk(quarDir)
+  const ageDays = Math.floor(oldestAge / (24 * 60 * 60_000))
+  if (totalFiles === 0 || ageDays < 14) return
+  const key = `quar-${new Date().toISOString().slice(0,10)}`
+  if (isOnCooldown('quarantine-reminder', key, 6 * 24 * 60 * 60_000)) return
+  markFired('quarantine-reminder', key)
+  notify(
+    `🗑 Quarantäne sichten?`,
+    `${totalFiles} Datei${totalFiles === 1 ? '' : 'en'} in _quarantine/, älteste seit ${ageDays} Tagen.`,
+    {
+      module: 'obsidian',
+      spokenText: `Alex, in der Vault-Quarantäne liegen ${totalFiles} Dateien, die älteste seit ${ageDays} Tagen. Magst du sie sichten?`
+    }
+  )
+  logEvent('daemon_fired', { daemon: 'quarantine-reminder', totalFiles, ageDays })
+}
 
 // ── Public API ─────────────────────────────────────────────────────────────────
 const cronJobs = new Map()  // daemonId → handle

@@ -618,18 +618,62 @@ export default function Settings({ onClose }) {
           {/* Proaktive Daemons ─────────────────────────────────────── */}
           <div className="field" style={{ borderTop: '1px solid var(--border)', paddingTop: 16, marginTop: 8 }}>
             <label style={{ fontSize: 13, fontWeight: 600 }}>Proaktive Erinnerungen</label>
-            <p className="hint">VINCI benachrichtigt dich von selbst — wenn du es willst.</p>
+            <p className="hint">VINCI benachrichtigt dich von selbst — wenn du es willst. Jede Erinnerung kommt als Notification, Chat-Message und Sprachausgabe (über das jeweilige TTS-Modul).</p>
+
             <label className="radio-label" style={{ marginTop: 8 }}>
               <input type="checkbox"
                 checked={local.proactive?.calendarWarning !== false}
                 onChange={e => update('proactive.calendarWarning', e.target.checked)} />
-              <span>Termin-Vorlauf — 15 min vor jedem Kalender-Termin eine Notification</span>
+              <span>📅 Termin-Vorlauf — 15 min vor jedem Kalender-Termin</span>
             </label>
-            <button className="btn-secondary" style={{ marginTop: 8 }}
+            <button className="btn-secondary" style={{ marginTop: 4, marginBottom: 8 }}
               onClick={async () => {
                 const r = await window.lyra.proactiveRun('calendar-warning')
-                alert(r?.ok ? 'Daemon manuell ausgeführt — wenn ein Termin in 12-17 min kommt, kommt die Notification.' : (r?.error || 'Fehler'))
-              }}>Calendar-Warning jetzt testen</button>
+                alert(r?.ok ? 'Geprüft — wenn ein Termin in 10-17 min kommt, läuft die Notification.' : (r?.error || 'Fehler'))
+              }}>jetzt testen</button>
+
+            <label className="radio-label" style={{ marginTop: 8 }}>
+              <input type="checkbox"
+                checked={local.proactive?.stromAnomaly !== false}
+                onChange={e => update('proactive.stromAnomaly', e.target.checked)} />
+              <span>⚡ Strom-Anomalie — wenn Verbrauch über Schwellwert</span>
+            </label>
+            <div style={{ marginLeft: 24, marginTop: 4, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>Schwelle (Watt):</span>
+              <input type="number" className="inp" style={{ width: 80 }}
+                value={local.proactive?.stromThresholdW || 2500}
+                min={500} step={100}
+                onChange={e => update('proactive.stromThresholdW', parseInt(e.target.value) || 2500)} />
+              <button className="btn-secondary"
+                onClick={async () => {
+                  const r = await window.lyra.proactiveRun('strom-anomaly')
+                  alert(r?.ok ? 'Geprüft — feuert nur wenn aktueller Watt > Schwellwert.' : (r?.error || 'Fehler'))
+                }}>jetzt testen</button>
+            </div>
+
+            <label className="radio-label" style={{ marginTop: 8 }}>
+              <input type="checkbox"
+                checked={local.proactive?.vaultDrift !== false}
+                onChange={e => update('proactive.vaultDrift', e.target.checked)} />
+              <span>📚 Vault-Drift — wöchentlich (So 18:00) Posts ohne Wikilinks</span>
+            </label>
+            <button className="btn-secondary" style={{ marginTop: 4, marginBottom: 8 }}
+              onClick={async () => {
+                const r = await window.lyra.proactiveRun('vault-drift')
+                alert(r?.ok ? 'Geprüft — feuert wenn ≥ 3 Posts ohne mentions stehen.' : (r?.error || 'Fehler'))
+              }}>jetzt testen</button>
+
+            <label className="radio-label" style={{ marginTop: 8 }}>
+              <input type="checkbox"
+                checked={local.proactive?.quarantineReminder !== false}
+                onChange={e => update('proactive.quarantineReminder', e.target.checked)} />
+              <span>🗑 Quarantäne-Reminder — wöchentlich (So 18:30) wenn _quarantine/ älter als 14 Tage</span>
+            </label>
+            <button className="btn-secondary" style={{ marginTop: 4 }}
+              onClick={async () => {
+                const r = await window.lyra.proactiveRun('quarantine-reminder')
+                alert(r?.ok ? 'Geprüft — feuert wenn älteste Datei > 14 Tage alt ist.' : (r?.error || 'Fehler'))
+              }}>jetzt testen</button>
           </div>
 
           {/* Mac-Vault-Migration ─────────────────────────────────────── */}
