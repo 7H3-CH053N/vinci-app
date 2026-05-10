@@ -48,7 +48,20 @@ function timeOfDay(d = new Date()) {
   return 'nacht'
 }
 
-// ── Live-Snapshot ─────────────────────────────────────────────────────────────
+// ── Live-Snapshot mit Cache + Race-Timeout ────────────────────────────────────
+// Live-Daten kosten Zeit (AppleScript-Calls für Calendar/Mail). Wir cachen sie 60s
+// und brechen nach 3s ab — VINCI darf im Worst-Case ohne Live-Block antworten.
+const liveDataCache = { ts: 0, nextEvent: null, mailUnread: null }
+const LIVE_CACHE_MS = 60_000
+const LIVE_RACE_MS  = 3_000
+
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise(resolve => setTimeout(() => resolve(null), ms))
+  ])
+}
+
 async function getNextEvent(ctx, lookaheadHours = 4) {
   try {
     const result = await registry.dispatch('calendar_getEventsRaw', { daysFromNow: 0, daysAhead: 1 }, ctx)
@@ -74,6 +87,29 @@ async function getRecentMailCount(ctx) {
   } catch { return null }
 }
 
+async function getLiveData(ctx) {
+  // Cache-Hit innerhalb 60s
+  if (Date.now() - liveDataCache.ts < LIVE_CACHE_MS) {
+    return { nextEvent: liveDataCache.nextEvent, mailUnread: liveDataCache.mailUnread }
+  }
+  // Parallel + 3s Race-Timeout pro Quelle, damit ein hängender AppleScript-Call
+  // den ganzen Chat-Turn nicht blockiert
+  const [nextEvent, mailUnread] = await Promise.all([
+    withTimeout(getNextEvent(ctx), LIVE_RACE_MS),
+    withTimeout(getRecentMailCount(ctx), LIVE_RACE_MS)
+  ])
+  liveDataCache.ts = Date.now()
+  liveDataCache.nextEvent = nextEvent
+  liveDataCache.mailUnread = mailUnread
+  return { nextEvent, mailUnread }
+}
+
+export function clearLiveDataCache() {
+  liveDataCache.ts = 0
+  liveDataCache.nextEvent = null
+  liveDataCache.mailUnread = null
+}
+
 // ── Kontext-Block bauen ────────────────────────────────────────────────────────
 /**
  * Baut den kompakten Situations-Block der vor den System-Prompt gehängt wird.
@@ -92,12 +128,9 @@ export async function buildSituationContext(ctx, opts = {}) {
   const phase = timeOfDay(now)
   lines.push(`- ${dateStr}, ${timeStr} (${phase})`)
 
-  // 2) Live-Daten parallel sammeln (calendar + mail)
+  // 2) Live-Daten (cached 60s + 3s race-timeout pro Quelle)
   if (!opts.skipLiveData) {
-    const [nextEvent, mailUnread] = await Promise.all([
-      getNextEvent(ctx),
-      getRecentMailCount(ctx)
-    ])
+    const { nextEvent, mailUnread } = await getLiveData(ctx)
     if (nextEvent) {
       const minsUntil = Math.round((new Date(nextEvent.start).getTime() - now.getTime()) / 60000)
       const t = new Date(nextEvent.start).toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' })
