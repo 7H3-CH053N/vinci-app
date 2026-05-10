@@ -141,11 +141,28 @@ export default function LyraOrbParticle({ isSpeaking = false, isThinking = false
     const clock = new THREE.Clock()
 
     // ── Resize via Container ──
+    // Camera-Distanz wird so gewählt dass die maximale Partikel-Ausdehnung (HARD_MAX_R)
+    // immer mit ~10px Rand zum Container passt — egal ob Fenster groß/klein,
+    // Chat offen/zu. So kommt der Orb nie über die Fensterränder.
+    const HARD_MAX_R = 50      // Hard-Cap für Partikel-Distanz
+    const VIEWPORT_MARGIN_PX = 10
+    const CAMERA_DRIFT = 8     // Compensate für camera.position.x/y oscillation in animate()
+
     function resize() {
       const w = wrap.clientWidth || 1
       const h = wrap.clientHeight || 1
       renderer.setSize(w, h, false)
       camera.aspect = w / h
+
+      // Kameraabstand so wählen, dass HARD_MAX_R + CAMERA_DRIFT in beide Achsen passt mit 10px Buffer
+      const usableV = Math.max(0.1, (h - VIEWPORT_MARGIN_PX * 2) / h)
+      const usableH = Math.max(0.1, (w - VIEWPORT_MARGIN_PX * 2) / w)
+      const fovV = camera.fov * Math.PI / 180
+      const fovH = 2 * Math.atan(Math.tan(fovV / 2) * camera.aspect)
+      const visibleR = HARD_MAX_R + CAMERA_DRIFT
+      const distV = visibleR / Math.tan(fovV / 2) / usableV
+      const distH = visibleR / Math.tan(fovH / 2) / usableH
+      camera.position.z = Math.max(distV, distH, 60)
       camera.updateProjectionMatrix()
     }
     resize()
@@ -269,6 +286,20 @@ export default function LyraOrbParticle({ isSpeaking = false, isThinking = false
         a[i3]   += vel[i3]
         a[i3+1] += vel[i3+1]
         a[i3+2] += vel[i3+2]
+
+        // Hard-Cap: Partikel niemals über HARD_MAX_R hinaus — sonst Orb über Fensterrand
+        const newDistSq = a[i3]*a[i3] + a[i3+1]*a[i3+1] + a[i3+2]*a[i3+2]
+        if (newDistSq > HARD_MAX_R * HARD_MAX_R) {
+          const newDist = Math.sqrt(newDistSq)
+          const k = HARD_MAX_R / newDist
+          a[i3]   *= k
+          a[i3+1] *= k
+          a[i3+2] *= k
+          // Velocity dämpfen damit nicht sofort wieder rausschiesst
+          vel[i3]   *= 0.3
+          vel[i3+1] *= 0.3
+          vel[i3+2] *= 0.3
+        }
       }
       geo.attributes.position.needsUpdate = true
 
