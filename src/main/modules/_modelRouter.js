@@ -17,7 +17,12 @@ const TRIVIAL_PATTERNS = [
   /^(ok\b|okay\b|alles\s+klar|passt\b|gut\b|super\b|cool\b)/i,
   /^(ja\b|nein\b|jo\b|jep\b|nope\b|klar\b|sicher\b)/i,
   /^(stop|halt|abbrechen|cancel|vergiss)/i,
-  /^(wer\s+bist\s+du|was\s+kannst\s+du)/i
+  /^(wer\s+bist\s+du|was\s+kannst\s+du)/i,
+  // Daten-Lookup-Queries: ein Tool-Call, klare Antwort, perfekt für Flash mit J1-Shortlist
+  /\b(wie\s+viele|wieviele|anzahl)\s+(ungelesene|offene|neue)\s+(mails?|nachrichten|aufgaben|termine|posts?)\b/i,
+  /^(was\s+steht\s+(heute|morgen)|aufgaben\s+(heute|morgen)|termine\s+(heute|morgen))/i,
+  /^(wie\s+läuft\s+mein\s+(mac|n8n)|wie\s+ist\s+das\s+wetter|aktueller?\s+stromverbrauch)/i,
+  /^(ungelesene\s+mails|neue\s+nachrichten|telefonnummer\s+von)/i
 ]
 
 // Komplexitäts-Marker — diese Queries brauchen Pro

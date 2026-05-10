@@ -74,12 +74,25 @@ export async function evaluateAnswer(question, answer, settings = {}) {
     const res = await model.generateContent(userPrompt)
     let text = res.response.text?.() || ''
     text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim()
-    const m = text.match(/\{[\s\S]*\}/)
-    const jsonStr = m ? m[0] : text
     const ms = Date.now() - t0
-    let parsed
-    try { parsed = JSON.parse(jsonStr) }
-    catch { return { score: 1.0, reason: 'invalid-json', fix: '', ms } }
+
+    // Robust parsen: greedy-match auf {...}, dann fallback auf score-extraction via regex
+    let parsed = null
+    const m = text.match(/\{[\s\S]*\}/)
+    if (m) {
+      try { parsed = JSON.parse(m[0]) } catch {}
+    }
+    if (!parsed) {
+      // Letzter Fallback: einzelne Felder per Regex extrahieren
+      const sm = text.match(/"score"\s*:\s*([0-9.]+)/)
+      const rm = text.match(/"reason"\s*:\s*"([^"]+)"/)
+      const fm = text.match(/"fix"\s*:\s*"([^"]+)"/)
+      if (sm) parsed = { score: parseFloat(sm[1]), reason: rm?.[1] || '', fix: fm?.[1] || '' }
+    }
+    if (!parsed) {
+      console.warn('[SelfEval] cannot parse:', text.slice(0, 200))
+      return { score: 1.0, reason: 'invalid-json', fix: '', ms }
+    }
     const score = Math.max(0, Math.min(1, Number(parsed.score) || 0))
     return {
       score,
