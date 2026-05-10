@@ -144,9 +144,9 @@ export default function LyraOrbParticle({ isSpeaking = false, isThinking = false
     // Camera-Distanz wird so gewählt dass die maximale Partikel-Ausdehnung (HARD_MAX_R)
     // immer mit ~10px Rand zum Container passt — egal ob Fenster groß/klein,
     // Chat offen/zu. So kommt der Orb nie über die Fensterränder.
-    const HARD_MAX_R = 50      // Hard-Cap für Partikel-Distanz
+    const HARD_MAX_R = 40      // Hard-Cap für Partikel-Distanz (nahe an idle-radius damit orb groesser wirkt)
     const VIEWPORT_MARGIN_PX = 10
-    const CAMERA_DRIFT = 8     // Compensate für camera.position.x/y oscillation in animate()
+    const CAMERA_DRIFT = 4     // Compensate für camera.position.x/y oscillation in animate()
 
     function resize() {
       const w = wrap.clientWidth || 1
@@ -175,19 +175,20 @@ export default function LyraOrbParticle({ isSpeaking = false, isThinking = false
       const t = clock.getElapsedTime()
       const state = stateRef.current
 
-      // State targets
+      // State targets — Radii so gewählt dass orb mit 10px-Camera-Fit-Math (HARD_MAX_R=40)
+      // mind. 75-90% des verfügbaren Raums füllt
       switch (state) {
         case 'idle':
-          targetRadius = 28; targetSpeed = 0.2; targetBright = 0.5; targetSize = 0.35
+          targetRadius = 32; targetSpeed = 0.2; targetBright = 0.5; targetSize = 0.35
           targetLineAmount = 0.15; targetElectronRate = 0; break
         case 'listening':
-          targetRadius = 22; targetSpeed = 0.3; targetBright = 0.65; targetSize = 0.4
+          targetRadius = 30; targetSpeed = 0.3; targetBright = 0.65; targetSize = 0.4
           targetLineAmount = 0.4; targetElectronRate = 0; break
         case 'thinking':
-          targetRadius = 16; targetSpeed = 0.5; targetBright = 0.7; targetSize = 0.3
+          targetRadius = 26; targetSpeed = 0.5; targetBright = 0.7; targetSize = 0.3
           targetLineAmount = 1.0; targetElectronRate = 0.015; break
         case 'speaking':
-          targetRadius = 18; targetSpeed = 0.2; targetBright = 0.7; targetSize = 0.4
+          targetRadius = 30; targetSpeed = 0.2; targetBright = 0.7; targetSize = 0.4
           targetLineAmount = 0.8; targetElectronRate = 0; break
       }
 
@@ -391,8 +392,8 @@ export default function LyraOrbParticle({ isSpeaking = false, isThinking = false
       }
 
       // Kamera-Drift
-      camera.position.x = Math.sin(t * 0.02) * 5
-      camera.position.y = Math.cos(t * 0.03) * 3
+      camera.position.x = Math.sin(t * 0.02) * 2.5
+      camera.position.y = Math.cos(t * 0.03) * 1.5
       camera.lookAt(0, 0, cloudZ * 0.2)
 
       renderer.render(scene, camera)
