@@ -353,6 +353,17 @@ export async function geminiChat({ message, history = [], apiKey, model, onToolC
         modelName
       })
 
+      // Sicherheitsnetz 0: Reine Zeit-Frage? Das brauchen wir kein LLM — wir kennen die Zeit selbst.
+      if (/^\s*(wie\s+sp[äa]t|wieviel\s+uhr|welche\s+(uhrzeit|zeit))\b/i.test(message)) {
+        const now = new Date()
+        const days = ['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag']
+        const day = days[now.getDay()]
+        const time = now.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' })
+        const date = now.toLocaleDateString('de-AT', { day: '2-digit', month: 'long', year: 'numeric' })
+        logEvent('gemini_safety_net_fired', { tool: 'local_time', message: message.slice(0,100) })
+        return `Es ist ${day}, ${date}, ${time} Uhr.`
+      }
+
       // Sicherheitsnetz 1: Sieht die User-Frage nach Web-Search aus? Dann rufen wir
       // web_search selbst auf und lassen Gemini nur noch synthetisieren.
       const looksWebbish = /\b(aktuell|neueste|neue|neuer|neues|neuigkeit|heute|kürzlich|gerade|momentan|derzeit|news|nachrichten|kurs|preis|aktie)\b/i.test(message)
