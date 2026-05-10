@@ -129,9 +129,12 @@ function runIcal(args) {
     }, (err, stdout, stderr) => {
       if (err) {
         const hint = stderr?.includes('not authorized') || stderr?.includes('access')
-          ? ' (TCC-Berechtigung fehlt – Systemeinstellungen → Datenschutz → Kalender)'
+          ? ' (TCC-Berechtigung fehlt)'
           : ''
-        console.error('[Calendar] icalBuddy error:', err.message, stderr?.slice(0,200), hint)
+        // Stilles Logging bei "No calendars" — bekanntes dev-Mode-Issue, AppleScript-Fallback springt ein
+        if (!stderr?.includes('No calendars')) {
+          console.error('[Calendar] icalBuddy error:', err.message, stderr?.slice(0,200), hint)
+        }
         return reject(new Error(err.message + hint))
       }
       console.log('[Calendar] icalBuddy ok, lines:', stdout.split('\n').length)

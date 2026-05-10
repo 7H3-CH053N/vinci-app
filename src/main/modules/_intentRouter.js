@@ -45,11 +45,11 @@ const INTENTS = {
   },
   news: {
     label: 'News / Nachrichten',
-    tools: ['news_getNews']
+    tools: ['news_getNews','web_search','web_saveToVault']  // web_search als Fallback bei Entity-spezifischen News
   },
   web: {
     label: 'Web-Suche',
-    tools: ['web_search','web_saveToVault','obsidian_search']
+    tools: ['web_search','web_saveToVault','obsidian_search','news_getNews']
   },
   obsidian: {
     label: 'Obsidian / Knowledge-Graph',
@@ -95,8 +95,9 @@ const HEURISTICS = [
   { intent: 'messages',     re: /\b(nachricht|imessage|sms|whatsapp|geschrieben|schick.*\bmessage|chat)\b/i },
   { intent: 'contacts',     re: /\b(telefonnummer|nummer\s+von|adresse\s+von|kontakt|geburtstag\s+von)\b/i },
   { intent: 'weather',      re: /\b(wetter|regen|sonne|temperatur|grad\s+celsius|wie\s+wird|prognose)\b/i },
-  { intent: 'news',         re: /\b(nachrichten|news|schlagzeilen|aktuelles\s+aus)\b/i },
-  { intent: 'web',          re: /\b(such\s+(im\s+)?web|internet\b|google\s+das|recherchier|aktuelle?\s+(kurs|preis))\b/i },
+  // News-Intent: nur bei generischen "Nachrichten"/"Schlagzeilen" — Entity-spezifisch ("Anthropic-News") fällt auf web
+  { intent: 'web',          re: /\b(such\s+(im\s+)?web|internet\b|google\s+das|recherchier|aktuelle?\s+(kurs|preis)|neueste\w*\s+(\w+-)?news|news\s+(zu|von|über|bei)\s+\w)\b/i },
+  { intent: 'news',         re: /\b(nachrichten\s+(heute|allgemein)?|schlagzeilen|tagesschau|aktuelles\s+aus|sport-?nachrichten|salzburg-?news)\b/i },
   { intent: 'obsidian',     re: /\b(notiert|notiz|notizen|vault|knowledge|obsidian|was\s+(weiß|wissen)\s+(wir|ich)\s+über)\b/i },
   { intent: 'homeassistant',re: /\b(licht|lampe|steckdose|heizung|smart\s*home|szene\s+aktivier|temperatur\s+im)\b/i },
   { intent: 'system',       re: /\b(cpu|ram|arbeitsspeicher|festplatte|akku|prozessor|wie\s+läuft\s+(mein\s+)?mac)\b/i },
