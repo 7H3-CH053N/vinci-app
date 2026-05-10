@@ -4,6 +4,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 import { registry } from './registry.js'
 import { logEvent } from './telemetry.js'
 import { routeIntent } from './_intentRouter.js'
+import { buildSituationContext, recordTurn } from './_situationContext.js'
 
 const SYSTEM_PROMPT = `Du bist VINCI, der persönliche KI-Assistent von Alex Januschewsky (Prompt Rocker).
 Alex ist Managing Director von medienwerk KG und KI-Berater in Salzburg.
@@ -251,9 +252,11 @@ export async function geminiChat({ message, history = [], apiKey, model, onToolC
   // Phase J1: Intent-Routing → Tool-Shortlist statt aller Tools
   const allTools = registry.getTools()
   let tools = allTools
+  let routedIntent = null
   if (settings.intentRouting !== false) {
     try {
       const routed = await routeIntent(message, settings)
+      routedIntent = routed.intent
       if (Array.isArray(routed.tools)) {
         if (routed.tools.length === 0) {
           // Begrüßung/Ack — gar keine Tools
@@ -272,10 +275,16 @@ export async function geminiChat({ message, history = [], apiKey, model, onToolC
     }
   }
 
-  const now = new Date()
-  const dateStr = now.toLocaleDateString('de-AT', { weekday:'long', day:'numeric', month:'long', year:'numeric' })
-  const timeStr = now.toLocaleTimeString('de-AT', { hour:'2-digit', minute:'2-digit' })
-  const dateContext = `\n\nAktuelles Datum und Uhrzeit: ${dateStr}, ${timeStr}`
+  // Phase J3: Episodischer Kontext — kompakter Situations-Block (Zeit, nächster Termin, Mail-Backlog, Session-Memory)
+  let situationContext = ''
+  if (settings.situationContext !== false) {
+    try {
+      const block = await buildSituationContext({ settings, getSettings: () => settings })
+      situationContext = '\n\n' + block
+    } catch (err) {
+      console.warn('[Gemini] situation context failed:', err.message)
+    }
+  }
 
   const memoryContext = buildMemoryContext()
 
@@ -286,7 +295,7 @@ export async function geminiChat({ message, history = [], apiKey, model, onToolC
     ? await getHAInventoryContext(settings.homeassistant)
     : ''
 
-  const fullSystemPrompt = SYSTEM_PROMPT + dateContext + memoryContext + haContext
+  const fullSystemPrompt = SYSTEM_PROMPT + situationContext + memoryContext + haContext
 
   // Convert history - filter empty content (caused by tool-call responses stored in state)
   // Gemini requires strict user/model alternation with non-empty parts
@@ -513,20 +522,26 @@ export async function geminiChat({ message, history = [], apiKey, model, onToolC
   const primary  = model || 'gemini-2.5-flash'
   const fallback = settings.geminiFallbackModel || 'gemini-2.5-flash'
 
+  // Wrapper der den Turn nach erfolgreichem Antworten aufzeichnet (für Phase J3 Session-Memory)
+  const recordOnSuccess = (text) => {
+    try { recordTurn({ userMessage: message, assistantText: text, intent: routedIntent }) } catch {}
+    return text
+  }
+
   try {
-    return await runWith(primary)
+    return recordOnSuccess(await runWith(primary))
   } catch (err1) {
     if (!shouldRetry(err1)) throw err1
     const reason = isOverload(err1) ? 'overload' : 'network error'
     console.warn(`[Gemini] ${primary} ${reason} — retry in 1s (${err1.message})`)
     await sleep(1000)
     try {
-      return await runWith(primary)
+      return recordOnSuccess(await runWith(primary))
     } catch (err2) {
       if (!shouldRetry(err2)) throw err2
       if (fallback && fallback !== primary) {
         console.warn(`[Gemini] ${primary} weiter Probleme — Fallback auf ${fallback}`)
-        return await runWith(fallback)
+        return recordOnSuccess(await runWith(fallback))
       }
       throw err2
     }

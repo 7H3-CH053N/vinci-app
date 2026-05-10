@@ -16,6 +16,7 @@ const DEFAULT_SETTINGS = {
   geminiFallbackModel: 'gemini-2.5-flash',  // Bei 503/Overload: schneller Fallback (akzeptable Qualität)
   smartRouting: true,                        // Phase J2: triviale Queries gehen auf Flash, Standard+Komplex auf Pro
   intentRouting: true,                       // Phase J1: Tool-Shortlist via Intent-Klassifikation (massiv weniger Tokens, höhere Tool-Accuracy)
+  situationContext: true,                    // Phase J3: Live-Snapshot (Zeit, nächster Termin, Mail-Backlog) + Session-Memory in jeden Prompt
   proactive: {                               // Phase J4: Hintergrund-Daemons für proaktive Notifications
     calendarWarning: true,                   // 15 min vor Termin
     stromAnomaly: true,                      // aktueller Watt > Schwellwert
