@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld('lyra', {
   jobsCancel:      (id)                => ipcRenderer.invoke('lyra:jobs:cancel', id),
   jobsAgents:      ()                  => ipcRenderer.invoke('lyra:jobs:agents'),
   jobsEnqueue:     (input)             => ipcRenderer.invoke('lyra:jobs:enqueue', input),
+  curatorApply:    (input)             => ipcRenderer.invoke('lyra:curator:apply', input),
   jobsCleanup:     ()                  => ipcRenderer.invoke('lyra:jobs:cleanup'),
   telemetryRecent: (n)                 => ipcRenderer.invoke('lyra:telemetry:recent', n),
   openExternal:    (url)              => ipcRenderer.send('lyra:open:external', url),

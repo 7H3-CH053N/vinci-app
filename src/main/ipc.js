@@ -21,6 +21,7 @@ import { getLastIntent } from './modules/_situationContext.js'
 import { listDaemons, runDaemonNow, rescheduleAll as rescheduleProactiveDaemons } from './modules/_proactiveDaemons.js'
 import { listJobs as listJobsQ, getJob as getJobQ, cleanupJobs } from './modules/_jobQueue.js'
 import { cleanupBrokenLinks } from './modules/_brokenLinkCleaner.js'
+import { applyCuratorActions } from './modules/_curatorApply.js'
 import { detectSubAgent, detectSubAgentLLM } from './modules/_intentRouter.js'
 import { enqueueAndRun, onJobEvent, cancelJobAndReschedule, kickScheduler } from './modules/_jobRunner.js'
 import { listAgents } from './modules/_subAgents.js'
@@ -317,6 +318,18 @@ export function setupIPC(win, { getSettings, saveSettings, getTokens, saveTokens
   ipcMain.handle('lyra:jobs:cancel', (_e, id) => ({ job: cancelJobAndReschedule(id, { settings: getSettings() }) }))
   ipcMain.handle('lyra:jobs:cleanup', () => cleanupJobs())
   ipcMain.handle('lyra:jobs:agents', () => ({ agents: listAgents() }))
+  // Vault-Curator: ausgewählte Actions anwenden
+  ipcMain.handle('lyra:curator:apply', async (_e, { jobId, selectedIds, dryRun = false }) => {
+    const settings = getSettings()
+    const vault = settings.obsidian?.vaultPath
+    if (!vault) return { error: 'Vault-Pfad nicht gesetzt' }
+    const job = getJobQ(jobId)
+    if (!job) return { error: 'Job nicht gefunden' }
+    const actions = job.result?.actions
+    if (!Array.isArray(actions)) return { error: 'Job hat keine Action-Liste' }
+    return await applyCuratorActions(vault, actions, selectedIds, { dryRun })
+  })
+
   ipcMain.handle('lyra:jobs:enqueue', (_e, { agent_type, params, title, user_query }) => {
     try {
       const job = enqueueAndRun(agent_type, params || {}, {

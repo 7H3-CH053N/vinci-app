@@ -103,10 +103,13 @@ export function checkBriefingRelevance(briefingMarkdown, topic) {
     }
   }
   // Topic sollte mindestens 1x im Body vorkommen — sonst hat der LLM ein
-  // anderes Thema synthetisiert (Tavily-Suche off-topic)
+  // anderes Thema synthetisiert (Tavily-Suche off-topic).
+  // Punctuation aus Topic-Tokens strippen: "Alphabet, Inc" → ["alphabet", "inc"]
   if (topicLc.length > 4 && !text.includes(topicLc)) {
-    // Versuche auch tokenweise: mindestens 1 Token des Topics > 3 chars muss matchen
-    const tokens = topicLc.split(/\s+/).filter(t => t.length > 3)
+    const tokens = topicLc
+      .replace(/[,.;:!?()"'„"]/g, ' ')
+      .split(/\s+/)
+      .filter(t => t.length > 3)
     const anyToken = tokens.some(t => text.includes(t))
     if (!anyToken) {
       return { relevant: false, reason: `Briefing erwähnt das Topic "${topic}" nirgends — Tavily lieferte off-topic Snippets` }

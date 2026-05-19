@@ -10,8 +10,9 @@ import { listAgents, getAgent } from '../_subAgents.js'
 import '../_agents/researcher.js'
 import '../_agents/briefing.js'
 import '../_agents/weekly.js'
+import '../_agents/vaultCurator.js'
 
-const EXPECTED_AGENTS = ['echo', 'researcher', 'briefing', 'weekly']
+const EXPECTED_AGENTS = ['echo', 'researcher', 'briefing', 'weekly', 'vault_curator']
 
 describe('SENTINEL — Sub-Agent-Registry vollständig', () => {
   it('hat alle erwarteten Agents registriert', () => {

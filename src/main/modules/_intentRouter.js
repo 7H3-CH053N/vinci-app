@@ -111,6 +111,16 @@ export function detectSubAgent(message) {
     }
   }
 
+  // Vault-Curator: "Vault-Check", "Vault-Audit", "schau dir den Vault an", "wie ist mein Vault"
+  const curatorRe = /(vault[\s-]?(check|audit|curator|review|analyse)|wie\s+ist\s+(?:mein\s+)?vault|schau\s+dir\s+(?:mal\s+)?(?:den\s+)?vault\s+an|vault[\s-]?aufr[äa]umen)\b/i
+  if (curatorRe.test(m)) {
+    return {
+      agentType: 'vault_curator',
+      params: {},
+      confirmation: 'Ich analysiere den Vault — Top-Mentions, Lücken, Aliase. Dauert ~30 Sekunden.'
+    }
+  }
+
   // Weekly-Review: "Wochenrückblick", "Wochenbilanz", "Weekly", "mach mir nen Wochenrückblick"
   const weeklyRe = /(?:mach(?:e|en)?\s+(?:mir|dir)?\s+(?:ein|nen)?\s+)?(wochenrückblick|wochenbilanz|wochenreview|weekly[\s-]?review|weekly)\b/i
   if (weeklyRe.test(m)) {

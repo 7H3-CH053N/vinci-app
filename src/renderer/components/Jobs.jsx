@@ -108,6 +108,20 @@ export default function Jobs({ onClose }) {
     } finally { setEnqueueing(false) }
   }
 
+  async function startCurator() {
+    if (enqueueing) return
+    setEnqueueing(true)
+    try {
+      const r = await window.lyra.jobsEnqueue({
+        agent_type: 'vault_curator',
+        params: {},
+        title: 'Vault-Curator-Analyse'
+      })
+      if (r?.error) { alert('Fehler: ' + r.error); return }
+      reload()
+    } finally { setEnqueueing(false) }
+  }
+
   async function submitResearch(e) {
     e?.preventDefault?.()
     const topic = researchInput.trim()
@@ -139,6 +153,7 @@ export default function Jobs({ onClose }) {
           <button className="btn-primary" onClick={() => { setShowResearchForm(s => !s); setShowEchoForm(false) }}>🔎 Recherche starten</button>
           <button className="btn-primary" onClick={startBriefing} disabled={enqueueing}>📋 Briefing jetzt</button>
           <button className="btn-primary" onClick={startWeekly} disabled={enqueueing}>📅 Wochenrückblick</button>
+          <button className="btn-primary" onClick={startCurator} disabled={enqueueing}>🧹 Vault-Curator</button>
           <button className="btn-secondary" onClick={() => { setShowEchoForm(s => !s); setShowResearchForm(false) }}>+ Echo-Test</button>
           <button className="btn-secondary" onClick={cleanup}>Cleanup (&gt;24h)</button>
           <button className="btn-secondary" onClick={reload}>Refresh</button>

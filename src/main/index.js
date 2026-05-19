@@ -7,9 +7,10 @@ import { getSettings, saveSettings, getTokens, saveTokens, getWindowBounds, save
 import { initMemory } from './modules/memory.js'
 import { initJobQueue } from './modules/_jobQueue.js'
 import './modules/_subAgents.js'    // Built-in 'echo' Smoke-Test-Agent
-import './modules/_agents/researcher.js'  // Stufe 1
-import './modules/_agents/briefing.js'    // Stufe 2
-import './modules/_agents/weekly.js'      // Stufe 4
+import './modules/_agents/researcher.js'    // Stufe 1
+import './modules/_agents/briefing.js'      // Stufe 2
+import './modules/_agents/weekly.js'        // Stufe 4
+import './modules/_agents/vaultCurator.js'  // Stufe 5
 import { setupMemoryWorker } from './modules/memoryWorker.js'
 import { setupTasks } from './tasks.js'
 import { setupIPC } from './ipc.js'

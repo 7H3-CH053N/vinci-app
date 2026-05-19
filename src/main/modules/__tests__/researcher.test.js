@@ -227,6 +227,14 @@ Anthropic hat das neue Modell Claude 4.5 vorgestellt.
     expect(checkBriefingRelevance(md, 'Anthropic AI 2026').relevant).toBe(true)
   })
 
+  it('REGRESSION: Topic mit Komma/Punkt findet sich auch ohne (Alphabet, Inc → Alphabet)', () => {
+    const md = `# Alphabet
+## Kurzfassung
+Alphabet ist Googles Holding.`
+    expect(checkBriefingRelevance(md, 'Alphabet, Inc').relevant).toBe(true)
+    expect(checkBriefingRelevance(md, 'Alphabet Inc.').relevant).toBe(true)
+  })
+
   it('rejected leeren Text', () => {
     expect(checkBriefingRelevance('', 'X').relevant).toBe(false)
     expect(checkBriefingRelevance(null, 'X').relevant).toBe(false)

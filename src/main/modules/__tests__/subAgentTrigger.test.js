@@ -44,6 +44,21 @@ describe('detectSubAgent — Researcher-Trigger', () => {
   })
 })
 
+describe('detectSubAgent — Vault-Curator-Trigger', () => {
+  it('matched "Vault-Check"', () => {
+    expect(detectSubAgent('Vault-Check')?.agentType).toBe('vault_curator')
+  })
+  it('matched "Vault Audit"', () => {
+    expect(detectSubAgent('Vault Audit')?.agentType).toBe('vault_curator')
+  })
+  it('matched "wie ist mein Vault"', () => {
+    expect(detectSubAgent('wie ist mein Vault')?.agentType).toBe('vault_curator')
+  })
+  it('matched "schau dir den Vault an"', () => {
+    expect(detectSubAgent('schau dir den Vault an')?.agentType).toBe('vault_curator')
+  })
+})
+
 describe('detectSubAgent — Weekly-Review-Trigger', () => {
   it('matched "Wochenrückblick"', () => {
     expect(detectSubAgent('Wochenrückblick')?.agentType).toBe('weekly')
