@@ -1,3 +1,4 @@
+import JobCard from './JobCard.jsx'
 
 // Simple markdown renderer: **bold**, *italic*, `code`, line breaks
 function renderMarkdown(text) {
@@ -79,6 +80,9 @@ export default function MessageBubble({ message }) {
         <p className="message-text">
           {isUser ? message.content : renderMarkdown(message.content)}
         </p>
+        {message.jobId && (
+          <JobCard jobId={message.jobId} agentType={message.agentType} initialText={message.content} />
+        )}
       </div>
 
       <div className="message-meta">

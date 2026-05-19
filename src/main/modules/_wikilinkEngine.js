@@ -1,4 +1,5 @@
 // Body Wikilink engine — scans Markdown bodies, sets [[Wikilinks]] on first occurrence
+import { localDateString } from './_localTime.js'
 // of each known entity (canonical name or alias), maintains mentions: in frontmatter,
 // and appends backlink bullets to entity notes.
 
@@ -152,7 +153,7 @@ export function createAutoFirmaStub(vaultPath, name, firstSeenIn) {
   const content = `---
 source: VINCI
 category: Firmen
-created: ${new Date().toISOString().slice(0, 10)}
+created: ${localDateString()}
 auto_created: true
 first_seen_in: [${firstSeenIn.slice(0, 3).map(s => `"[[${s}]]"`).join(', ')}]
 ---

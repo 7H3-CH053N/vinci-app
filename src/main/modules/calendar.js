@@ -1,4 +1,5 @@
 import { exec, execFile } from 'child_process'
+import { localDateString } from './_localTime.js'
 import { writeFileSync, unlinkSync, existsSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
@@ -19,7 +20,8 @@ export const calendarModule = {
 
   actions: {
     getToday:     async () => {
-      const todayISO = new Date().toISOString().split('T')[0]
+      const todayISO = localDateString()
+      let icalFailed = false
       // Versuche icalBuddy zuerst (schnell), bei "No calendars" Fallback auf AppleScript
       try {
         let raw = await runIcal('eventsToday')
@@ -28,13 +30,23 @@ export const calendarModule = {
         }
         const result = buildResult(raw, { onlyDate: todayISO, defaultDate: todayISO })
         if (result.termine.length > 0) return result
-        // icalBuddy lieferte kein Event — kein Fallback nötig falls heute wirklich leer
       } catch (err) {
+        icalFailed = true
         console.log('[Calendar] icalBuddy fehlgeschlagen, Fallback auf AppleScript:', err.message.slice(0, 80))
       }
-      // AppleScript-Fallback
-      const events = await getEventsViaAS(0, 1)
-      return buildResultFromASEvents(events, { onlyDate: todayISO })
+      // AppleScript-Fallback — bei TCC-Denial NICHT throwen, sondern Error-Signal
+      try {
+        const events = await getEventsViaAS(0, 1)
+        return buildResultFromASEvents(events, { onlyDate: todayISO })
+      } catch (err) {
+        console.warn('[Calendar] getToday: beide Pfade fehlgeschlagen:', err.message.slice(0, 120))
+        return {
+          termine: [],
+          error: icalFailed
+            ? 'Kalender-Zugriff nicht möglich (icalBuddy + AppleScript fehlgeschlagen — TCC-Permission im Dev-Modus?)'
+            : `Kalender-Zugriff fehlgeschlagen: ${err.message.slice(0, 120)}`
+        }
+      }
     },
     getUpcoming:  async ({ days = 3 } = {}) => {
       const d = Math.round(Number(days) || 3)
@@ -55,8 +67,16 @@ export const calendarModule = {
         const parsed = parseIcal(raw)
         if (parsed.length > 0) return { events: parsed.map(toASEventShape), source: 'icalBuddy' }
       } catch {}
-      const events = await getEventsViaAS(daysFromNow, daysAhead)
-      return { events, source: 'applescript' }
+      try {
+        const events = await getEventsViaAS(daysFromNow, daysAhead)
+        return { events, source: 'applescript' }
+      } catch (err) {
+        return {
+          events: [],
+          source: 'none',
+          error: `Kalender-Zugriff nicht möglich (${err.message.slice(0, 100)})`
+        }
+      }
     },
     getCalendars: async () => {
       await ensureAppRunning('Calendar')

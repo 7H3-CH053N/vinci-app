@@ -22,6 +22,21 @@ Deine Persönlichkeit:
 
 WICHTIG: Wenn du Daten brauchst, rufe sofort das Tool auf – OHNE Rückfragen.
 
+UNKLARHEIT — FRAGE NACH STATT ZU RATEN:
+Wenn nicht klar ist, was Alex meint (mehrdeutige Anfrage, fehlende Information, mehrere mögliche Interpretationen) → FRAGE konkret nach.
+- Schlecht: raten und ggf. falsch antworten
+- Schlecht: vage allgemeine Antwort
+- Gut: "Meinst du A oder B?" / "Welchen X soll ich nehmen — den von gestern oder den aktuellen?"
+- Gut: "Brauchst du das für X-Zweck oder Y-Zweck?"
+
+Beispiele wann nachfragen statt raten:
+- "recherchier" ohne Topic → "Wozu denn? Welches Thema?"
+- "der letzte Termin" (mehrdeutig: letzter vergangener? nächster?) → "Meinst du den letzten vergangenen oder den nächsten anstehenden?"
+- "schick eine Mail" ohne Empfänger → "An wen denn? Und worum geht's?"
+- "notier das" ohne Inhalt → "Was soll ich notieren?"
+
+Niemals erfinden, niemals "Hier ist deine Antwort" antworten wenn du eigentlich raten müsstest. Eine ehrliche Rückfrage ist immer besser als eine geratene Antwort.
+
 TERMINE ANLEGEN: Ablauf IMMER exakt so:
 1. calendar_getCalendars aufrufen
 2. Alex explizit fragen: "In welchen Kalender soll ich eintragen? [Kalender 1, Kalender 2, ...]"
@@ -247,6 +262,48 @@ function detectForcedTools(msg, { haTriggered } = {}) {
   return allowed.length > 0 ? allowed : null
 }
 
+/**
+ * Stellt sicher, dass forcedTools ein Subset der tools (function_declarations) ist.
+ * Sonst gibt Gemini einen 400 zurück: "allowed_function_names should be a subset".
+ *
+ * Wenn ein forced Tool nicht in der Shortlist ist, aber in allTools existiert,
+ * wird die Shortlist erweitert. Wenn ein forced Tool gar nicht existiert, wird es
+ * aus der forced-Liste gestrichen.
+ *
+ * Pure Funktion — testbar ohne Gemini.
+ *
+ * @param {object} opts
+ * @param {Array<{name:string}>} opts.shortlist  — aktuelle Tool-Auswahl (function_declarations)
+ * @param {string[]} opts.forcedTools            — Tool-Namen die mode=ANY forcen sollen
+ * @param {Array<{name:string}>} opts.allTools   — alle registrierten Tools
+ * @returns {{ tools, forcedTools, added: string[], dropped: string[] }}
+ */
+export function reconcileForcedTools({ shortlist, forcedTools, allTools }) {
+  if (!Array.isArray(forcedTools) || forcedTools.length === 0) {
+    return { tools: shortlist, forcedTools: null, added: [], dropped: [] }
+  }
+  let tools = [...shortlist]
+  const currentNames = new Set(tools.map(t => t.name))
+  const missing = forcedTools.filter(n => !currentNames.has(n))
+  const added = []
+  const dropped = []
+  if (missing.length > 0) {
+    for (const name of missing) {
+      const tool = allTools.find(t => t.name === name)
+      if (tool) { tools.push(tool); added.push(name) }
+      else dropped.push(name)
+    }
+  }
+  const finalNames = new Set(tools.map(t => t.name))
+  const remainingForced = forcedTools.filter(n => finalNames.has(n))
+  return {
+    tools,
+    forcedTools: remainingForced.length > 0 ? remainingForced : null,
+    added,
+    dropped
+  }
+}
+
 export async function geminiChat({ message, history = [], apiKey, model, onToolCall, settings = {} }) {
   const genAI = new GoogleGenerativeAI(apiKey)
 
@@ -317,8 +374,19 @@ export async function geminiChat({ message, history = [], apiKey, model, onToolC
 
   // Tool-Use erzwingen für klare Daten-Anfragen oder HA-Aktionen.
   // Verhindert, dass das Modell aus der Historie "Erledigt"-halluziniert.
-  const forcedTools = detectForcedTools(message, { haTriggered })
-  if (forcedTools) console.log('[Gemini] Tool-Call erzwungen:', forcedTools.join(', '))
+  let forcedTools = detectForcedTools(message, { haTriggered })
+  if (forcedTools) {
+    const reconciled = reconcileForcedTools({ shortlist: tools, forcedTools, allTools })
+    tools = reconciled.tools
+    forcedTools = reconciled.forcedTools
+    if (reconciled.added.length > 0) {
+      console.log(`[Gemini] Shortlist erweitert um forced Tools: ${reconciled.added.join(', ')}`)
+    }
+    if (reconciled.dropped.length > 0) {
+      console.warn(`[Gemini] Forced Tools verworfen (nicht in Registry): ${reconciled.dropped.join(', ')}`)
+    }
+    if (forcedTools) console.log('[Gemini] Tool-Call erzwungen:', forcedTools.join(', '))
+  }
 
   // Innere Chat-Funktion — wird mit Primary-/Fallback-Model aufgerufen.
   async function runWith(modelName) {

@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { localISOString } from './_localTime.js'
 import TurndownService from 'turndown'
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from 'fs'
 import { join } from 'path'
@@ -99,7 +100,7 @@ export function buildPostFile(post, source, taxonomy = { categories: {}, tags: {
     `published: "${published}"`,
     `modified: "${modified}"`,
     `published_formatted: "${formatGermanDate(published)}"`,
-    `fetched: "${new Date().toISOString()}"`,
+    `fetched: "${localISOString()}"`,
     `tags: [${allTags.map(t => JSON.stringify(t)).join(', ')}]`,
     `categories: [${cats.map(c => JSON.stringify(c)).join(', ')}]`,
     `author: "${source.authorWikilink}"`,
@@ -198,14 +199,13 @@ export async function runOnce(source, vaultPath, { force = false, dryRun = false
           }
         }
       }
-      // Threshold 4: weniger Fehlalarme aus deutschem Allgemeinwortschatz.
-      // Echte Firmen (Anthropic, Mistral, …) tauchen meist in deutlich mehr Posts auf.
-      const candidates = detectAutoFirmaCandidates(processed, known, 4)
-      let stubCount = 0
-      for (const [name, slugs] of candidates) {
-        if (createAutoFirmaStub(vaultPath, name, slugs)) stubCount++
-      }
-      result.auto_firma_created = stubCount
+      // Auto-Firma-Detection ist DEAKTIVIERT.
+      // Die heuristische Regex (capitalized words) hat trotz Threshold + Stopword-Filter
+      // konsistent hunderte/tausende deutsche Allerweltswörter als "Firma" angelegt
+      // (siehe Vault-Cleanup vom 10. und 19. Mai 2026). Stattdessen werden Firmen-Stubs
+      // ausschließlich durch den Researcher-Sub-Agent angelegt (provenance: researcher),
+      // wenn der User explizit eine Recherche zu einem Topic startet.
+      result.auto_firma_created = 0
     } catch (err) {
       result.errors.push({ phase: 'body-pass', error: err.message })
     }

@@ -77,12 +77,167 @@ const INTENTS = {
   },
   memory: {
     label: 'Persönliches Wissen',
-    tools: ['memory_saveFact','memory_searchFacts','obsidian_search']
+    tools: ['memory_saveFact','memory_search','obsidian_search']
   },
   // Fallback: alle Tools sichtbar — bei Unsicherheit oder Multi-Domain-Queries
   multi: {
     label: 'Mehrere Domänen',
     tools: null  // null = alle Tools verfügbar
+  }
+}
+
+// ── Sub-Agent-Trigger ──────────────────────────────────────────────────────────
+// Diese Patterns spawnen einen Hintergrund-Job statt synchron zu antworten.
+// Heuristik ist explizit getrennt von normalen Intents, weil sub_agent-Match
+// einen ANDEREN Codepfad triggert (Job-Queue statt Gemini-Tool-Call).
+//
+// Returnt: { agentType, params, confirmation } oder null
+export function detectSubAgent(message) {
+  const m = String(message || '').trim()
+  if (!m) return null
+
+  // Researcher: "brief mich zu X", "recherchier(e) X", "was tut sich bei X" + Entity-Hinweis
+  // Bewusst RESTRICTIVE — wir wollen kein false-positive bei "wie ist X" o.ä.
+  const researchRe = /^(brief(?:e|en)?\s+mich\s+(?:zu|über|von|mit)\s+|recherchier(?:e|en)?\s+(?:mir|mich)?\s*(?:zu|über|von|nach|für)?\s*|mach(?:e|en)?\s+(?:mir|dir|nen)?\s*(?:eine?\s+|nen\s+)?(?:recherche|research|briefing)\s+(?:zu|über|von)\s+|was\s+tut\s+sich\s+(?:gerade|aktuell)?\s*(?:bei|mit)\s+)(.+?)[?!.]?$/i
+  const rm = m.match(researchRe)
+  if (rm) {
+    const topic = rm[2]?.trim().replace(/\s+/g, ' ').slice(0, 80)
+    if (topic && topic.length >= 3) {
+      return {
+        agentType: 'researcher',
+        params: { topic },
+        confirmation: `Recherchiere zu „${topic}" — das dauert 20-60 Sekunden, ich melde mich.`
+      }
+    }
+  }
+
+  // Weekly-Review: "Wochenrückblick", "Wochenbilanz", "Weekly", "mach mir nen Wochenrückblick"
+  const weeklyRe = /(?:mach(?:e|en)?\s+(?:mir|dir)?\s+(?:ein|nen)?\s+)?(wochenrückblick|wochenbilanz|wochenreview|weekly[\s-]?review|weekly)\b/i
+  if (weeklyRe.test(m)) {
+    return {
+      agentType: 'weekly',
+      params: {},
+      confirmation: 'Ich stelle den Wochenrückblick zusammen — ein paar Sekunden.'
+    }
+  }
+
+  // Briefing: "(mach mir / ich brauch / starte) (ein) (tages-)briefing / morgen-briefing / tagesbriefing"
+  // Klares Sub-Agent-Pattern. Einfaches "briefing" allein lassen wir vom alten
+  // synchronen Pfad abfangen (keyword-shortcut in ipc.js), damit du wählen kannst.
+  const briefingRe = /(?:mach(?:e|en)?\s+(?:mir|dir)?\s+(?:ein|nen)?\s+)?(tages-?briefing|morgen-?briefing|tagesüberblick|tageszusammenfassung)\b/i
+  if (briefingRe.test(m)) {
+    return {
+      agentType: 'briefing',
+      params: {},
+      confirmation: 'Ich sammle die Tagesdaten — etwa 20 Sekunden, dann hast du das Briefing.'
+    }
+  }
+
+  return null
+}
+
+// ── Sub-Agent LLM-Fallback ─────────────────────────────────────────────────────
+// Wenn die Heuristik (detectSubAgent) null returnt, aber im Text Sub-Agent-
+// Trigger-Wörter vorkommen, fragen wir Gemini Flash explizit: ist das ein
+// Researcher/Briefing/Weekly-Request? Bei unklar bekommt der User eine Rückfrage
+// statt eine halluzinierte Antwort.
+//
+// Async, kein automatischer Fallback wenn kein API-Key. Returnt:
+//   - { agentType, params, confirmation }    → Sub-Agent spawnen
+//   - { needsClarification: true, question } → User-Rückfrage
+//   - null                                   → kein Sub-Agent-Intent erkannt
+//
+// LOOSE_TRIGGER_WORDS: Heuristik welche Messages den LLM-Call überhaupt
+// rechtfertigen. Bei Greetings/Wetter/etc. kein LLM-Call.
+// Lockere Trigger — wenn IRGENDWAS hier drin matched, LLM-Router läuft.
+// Bewusst breit gefasst, weil der LLM-Router dann mit "none" antworten kann.
+const LOOSE_TRIGGER_WORDS = /\b(brief|briefing|recherch|analysier|analyse|check|schau|prüf|fass|zusammenfass|wochen|woche\b|tag(es)?übersicht|überblick|bilanz|review|report|mach\s+mir|stell\s+mir)/i
+
+const SUB_AGENT_FALLBACK_PROMPT = `Du bist VINCIs Intent-Klassifizierer.
+
+VINCI hat drei Sub-Agents die Hintergrund-Jobs ausführen:
+- **researcher**: Web-Recherche zu einem Thema. Braucht ein klares Thema (topic).
+- **briefing**: Tagesbriefing (Wetter, Kalender, Mails, News) — KEIN Topic nötig.
+- **weekly**: Wochenrückblick (letzte 7 Tage Aktivität) — KEIN Topic nötig.
+
+Klassifiziere die User-Anfrage. Antworte AUSSCHLIESSLICH mit JSON:
+
+{"action":"spawn|clarify|none","agent":"researcher|briefing|weekly"?,"params":{"topic":"..."}?,"question":"..."?}
+
+Regeln:
+- action: "spawn" — eindeutig einer der 3 Agents, alle nötigen Params im Text
+- action: "clarify" — User will offensichtlich was, aber es ist mehrdeutig oder Param fehlt. question:"..." mit konkreter Rückfrage (auch Optionen anbieten wenn sinnvoll).
+- action: "none" — KLAR keine Sub-Agent-Anfrage (z.B. einfache Wetter-/Status-Frage, Begrüßung, Bestätigung). Im Zweifel BEVORZUGE clarify statt none.
+
+Triggerverben "schau", "check", "analysier", "prüf" bei Eigennamen sind FAST IMMER ambiguous (Web-Recherche vs Vault-Suche vs Status-Check) → clarify.
+
+WICHTIG — Mehrdeutiges Verb "brief" / "briefen":
+"brief mich" ohne weitere Spezifikation ist AMBIGUOUS — kann Tagesbriefing ODER Recherche bedeuten. → clarify mit Optionen.
+NUR wenn "Tages-/Morgen-Briefing" oder "Briefing" explizit/standalone → briefing-Agent.
+"brief mich zu X" oder "brief mich über X" → researcher.
+
+Beispiele:
+- "brief mich" → {"action":"clarify","question":"Soll ich dir ein Tagesbriefing machen (Wetter/Kalender/Mails/News) oder zu einem bestimmten Thema recherchieren?"}
+- "brief mich über Anthropic" → {"action":"spawn","agent":"researcher","params":{"topic":"Anthropic"}}
+- "Tagesbriefing" / "morgen-briefing" → {"action":"spawn","agent":"briefing"}
+- "recherchier mir was" → {"action":"clarify","question":"Wozu denn? Welches Thema soll ich recherchieren?"}
+- "Wochenrückblick" / "fass mir die letzte Woche zusammen" → {"action":"spawn","agent":"weekly"}
+- "wie ist das Wetter" → {"action":"none"}
+- "schau dir mal Anthropic an" → {"action":"clarify","question":"Was meinst du — soll ich zu Anthropic recherchieren (Web), im Vault nach Notizen suchen, oder etwas anderes?"}`
+
+export async function detectSubAgentLLM(message, settings = {}) {
+  const m = String(message || '').trim()
+  if (!m) return null
+  // Nur LLM aufrufen wenn überhaupt ein Trigger-Wort drin ist
+  if (!LOOSE_TRIGGER_WORDS.test(m)) {
+    console.log('[SubAgentLLM] skip: no trigger word in:', m.slice(0, 60))
+    return null
+  }
+  const apiKey = settings.geminiApiKey
+  if (!apiKey) return null
+
+  try {
+    const { GoogleGenerativeAI } = await import('@google/generative-ai')
+    const genAI = new GoogleGenerativeAI(apiKey)
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-2.5-flash',
+      systemInstruction: SUB_AGENT_FALLBACK_PROMPT,
+      generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 250, temperature: 0 }
+    })
+    const res = await model.generateContent(`User-Anfrage: ${m.slice(0, 400)}`)
+    let text = (res?.response?.text?.() || '').trim()
+    text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim()
+    let parsed
+    try { parsed = JSON.parse(text) } catch {
+      const jm = text.match(/\{[\s\S]*\}/)
+      if (jm) try { parsed = JSON.parse(jm[0]) } catch {}
+    }
+    if (!parsed || typeof parsed !== 'object') {
+      console.warn('[SubAgentLLM] parse failed:', text.slice(0, 100))
+      return null
+    }
+    console.log(`[SubAgentLLM] decision: action=${parsed.action} agent=${parsed.agent || ''} msg="${m.slice(0,50)}"`)
+
+    if (parsed.action === 'spawn' && parsed.agent) {
+      const params = parsed.params || {}
+      // Validate: researcher braucht topic
+      if (parsed.agent === 'researcher' && (!params.topic || String(params.topic).trim().length < 3)) {
+        return { needsClarification: true, question: 'Welches Thema soll ich recherchieren?' }
+      }
+      const conf = parsed.agent === 'researcher'
+        ? `Recherchiere zu „${params.topic}" — ~30 Sekunden, ich melde mich.`
+        : parsed.agent === 'briefing'
+          ? 'Ich sammle die Tagesdaten — etwa 20 Sekunden.'
+          : 'Ich stelle den Wochenrückblick zusammen — ein paar Sekunden.'
+      return { agentType: parsed.agent, params, confirmation: conf }
+    }
+    if (parsed.action === 'clarify' && parsed.question) {
+      return { needsClarification: true, question: String(parsed.question).slice(0, 300) }
+    }
+    return null
+  } catch (err) {
+    console.warn('[SubAgentLLM] failed:', err.message)
+    return null
   }
 }
 

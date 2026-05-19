@@ -23,7 +23,8 @@ const DEFAULT_SETTINGS = {
     stromAnomaly: true,                      // aktueller Watt > Schwellwert
     stromThresholdW: 2500,                   // ab wie vielen Watt eine Anomalie ist
     vaultDrift: true,                        // wöchentlich Posts-ohne-Wikilinks-Check
-    quarantineReminder: true                 // wöchentlich _quarantine/ älter als 14 Tage
+    quarantineReminder: true,                // wöchentlich _quarantine/ älter als 14 Tage
+    weeklyReview: true                       // Sonntag 19:00 Wochenrückblick via Sub-Agent
   },
   ollamaModel: 'gemma4',
   ollamaUrl: 'http://localhost:11434',

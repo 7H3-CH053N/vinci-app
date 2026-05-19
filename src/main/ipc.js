@@ -19,6 +19,11 @@ import { registry } from './modules/registry.js'
 import { logEvent, readRecent as readRecentTelemetry } from './modules/telemetry.js'
 import { getLastIntent } from './modules/_situationContext.js'
 import { listDaemons, runDaemonNow, rescheduleAll as rescheduleProactiveDaemons } from './modules/_proactiveDaemons.js'
+import { listJobs as listJobsQ, getJob as getJobQ, cleanupJobs } from './modules/_jobQueue.js'
+import { cleanupBrokenLinks } from './modules/_brokenLinkCleaner.js'
+import { detectSubAgent, detectSubAgentLLM } from './modules/_intentRouter.js'
+import { enqueueAndRun, onJobEvent, cancelJobAndReschedule, kickScheduler } from './modules/_jobRunner.js'
+import { listAgents } from './modules/_subAgents.js'
 import { geminiChat } from './modules/gemini.js'
 import { routeAndLog } from './modules/_modelRouter.js'
 import { triggerBriefing } from './scheduler.js'
@@ -32,9 +37,47 @@ export function setupIPC(win, { getSettings, saveSettings, getTokens, saveTokens
     const chatStart = Date.now()
     console.log('[CHAT]', message.slice(0, 60))
 
-    // Briefing keyword shortcut — trigger directly without Gemini tool call
-    if (/briefing|☀/i.test(message.trim())) {
-      console.log('[CHAT] Briefing keyword → direct trigger')
+    // Sub-Agent-Trigger (Phase J6 Stufe 2+): Pattern wie "brief mich zu X",
+    // "recherchiere Y", "Tagesbriefing" → Hintergrund-Job statt synchroner Chat.
+    // Antwort enthält jobId, ChatPanel rendert das als Live-Job-Card.
+    // Erst Heuristik (schnell), dann LLM-Fallback bei Trigger-Wörtern (intelligent).
+    let subAgent = detectSubAgent(message)
+    if (!subAgent) {
+      const settings0 = getSettings()
+      const llmRouted = await detectSubAgentLLM(message, settings0)
+      if (llmRouted?.needsClarification) {
+        // Intelligente Rückfrage statt zu raten oder zu halluzinieren
+        console.log('[CHAT] Sub-Agent LLM-Router → Rückfrage:', llmRouted.question.slice(0, 60))
+        return { text: llmRouted.question, module: 'chat' }
+      }
+      if (llmRouted?.agentType) subAgent = llmRouted
+    }
+    if (subAgent && !subAgent.needsClarification) {
+      console.log('[CHAT] Sub-Agent erkannt:', subAgent.agentType, JSON.stringify(subAgent.params).slice(0, 60))
+      try {
+        const settings = getSettings()
+        const job = enqueueAndRun(
+          subAgent.agentType,
+          subAgent.params,
+          { user_query: message, ctx: { settings } }
+        )
+        const moduleForTTS = subAgent.agentType === 'briefing' || subAgent.agentType === 'weekly' ? 'briefing' : 'chat'
+        return {
+          text: subAgent.confirmation,
+          jobId: job.id,
+          agentType: subAgent.agentType,
+          module: moduleForTTS
+        }
+      } catch (err) {
+        return { error: `Sub-Agent konnte nicht gestartet werden: ${err.message}` }
+      }
+    }
+
+    // Briefing keyword shortcut — alter synchroner Pfad (Cmd+Shift+Briefing-Button)
+    // Bleibt für Backward-Compat. "Tagesbriefing" / "mach mir ein Briefing" gehen
+    // jetzt durch detectSubAgent oben.
+    if (/^briefing\s*$|^☀/i.test(message.trim())) {
+      console.log('[CHAT] Briefing keyword → direct trigger (alt)')
       triggerBriefing(win)
       return { text: 'Briefing wird erstellt...' }
     }
@@ -267,6 +310,36 @@ export function setupIPC(win, { getSettings, saveSettings, getTokens, saveTokens
   ipcMain.handle('lyra:proactive:list',  () => ({ daemons: listDaemons() }))
   ipcMain.handle('lyra:proactive:run',   (_e, id) => runDaemonNow(id))
   ipcMain.handle('lyra:proactive:reschedule', () => { rescheduleProactiveDaemons(); return { ok: true } })
+
+  // Sub-Agent Jobs (Phase J6) — Liste, Cancel, manuelles Enqueue, Cleanup
+  ipcMain.handle('lyra:jobs:list', (_e, opts = {}) => ({ jobs: listJobsQ(opts) }))
+  ipcMain.handle('lyra:jobs:get',  (_e, id) => ({ job: getJobQ(id) }))
+  ipcMain.handle('lyra:jobs:cancel', (_e, id) => ({ job: cancelJobAndReschedule(id, { settings: getSettings() }) }))
+  ipcMain.handle('lyra:jobs:cleanup', () => cleanupJobs())
+  ipcMain.handle('lyra:jobs:agents', () => ({ agents: listAgents() }))
+  ipcMain.handle('lyra:jobs:enqueue', (_e, { agent_type, params, title, user_query }) => {
+    try {
+      const job = enqueueAndRun(agent_type, params || {}, {
+        title, user_query, ctx: { settings: getSettings() }
+      })
+      return { job }
+    } catch (err) {
+      return { error: err.message }
+    }
+  })
+
+  // Job-Events ans Renderer forwarden + Scheduler nach App-Start kicken
+  onJobEvent(({ type, job, info }) => {
+    win?.webContents.send('lyra:job:event', { type, job, info })
+  })
+  kickScheduler({ settings: getSettings() })
+
+  ipcMain.handle('lyra:cleaner:brokenLinks', async (_e, opts = {}) => {
+    const settings = getSettings()
+    const vault = settings.obsidian?.vaultPath
+    if (!vault) return { error: 'Vault-Pfad nicht gesetzt.' }
+    return cleanupBrokenLinks(vault, { dryRun: !!opts.dryRun })
+  })
 
   ipcMain.handle('lyra:cleaner:scan', async (_e, opts = {}) => {
     const settings = getSettings()

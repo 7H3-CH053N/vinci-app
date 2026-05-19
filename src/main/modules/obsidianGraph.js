@@ -1,4 +1,5 @@
 // ── Knowledge-Graph-Builder für Obsidian ───────────────────────────────────────
+import { localDateString } from './_localTime.js'
 // Wandelt einen Fact-Satz in eine vernetzte Notiz-Struktur:
 //
 //   <Vault>/VINCI/
@@ -350,7 +351,7 @@ function writeEntityNote(vault, entity, linkedFact) {
 `---
 source: VINCI
 category: ${entity.category}
-created: ${new Date().toISOString().split('T')[0]}
+created: ${localDateString()}
 ---
 
 # ${entity.name}

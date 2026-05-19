@@ -1,4 +1,5 @@
 // ── Aufgaben-Modul ─────────────────────────────────────────────────────────────
+import { localISOString } from './modules/_localTime.js'
 // Plant und führt geplante Prompts aus, schickt Ergebnisse als
 // macOS-Notification + speichert sie in einer In-App-History.
 //
@@ -54,7 +55,7 @@ export function createTask(input) {
     prompt:      String(input.prompt || '').slice(0, 2000),
     schedule:    sanitizeSchedule(input.schedule),
     enabled:     input.enabled !== false,
-    createdAt:   new Date().toISOString(),
+    createdAt:   localISOString(),
     lastRunAt:   null,
     lastError:   null
   }
@@ -191,7 +192,7 @@ function rescheduleOne(task) {
 // ── Run + Notify ──────────────────────────────────────────────────────────────
 async function runAndNotify(task, manual) {
   console.log(`[Tasks] running "${task.name}" (${manual ? 'manual' : 'scheduled'})`)
-  const startedAt = new Date().toISOString()
+  const startedAt = localISOString()
   let resultText = ''
   let errorText  = null
   try {
@@ -199,7 +200,7 @@ async function runAndNotify(task, manual) {
   } catch (err) {
     errorText = err.message || String(err)
   }
-  const finishedAt = new Date().toISOString()
+  const finishedAt = localISOString()
 
   // Persist result
   const result = {

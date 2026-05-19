@@ -59,10 +59,13 @@ export async function triggerBriefing(win) {
     ? `Aktuell ${data.weather.temperature}°C (gefühlt ${data.weather.feelsLike}°C), ${data.weather.condition}. Heute: ${data.weather.todayMin}–${data.weather.todayMax}°C, ${data.weather.todayCondition}.`
     : 'Wetterdaten nicht verfügbar.'
 
+  const calErr = data.calendar?.error || (data.calendar == null ? 'Kalender konnte nicht abgerufen werden' : null)
   const calEntries = data.calendar?.termine || []
-  const calStr = calEntries.length
-    ? calEntries.map(e => `• ${e}`).join('\n')
-    : 'Keine Termine heute.'
+  const calStr = calErr
+    ? `(Kalender-Zugriff fehlgeschlagen: ${calErr})`
+    : calEntries.length
+      ? calEntries.map(e => `• ${e}`).join('\n')
+      : 'Keine Termine heute.'
 
   const remStr = data.reminders?.length
     ? data.reminders.slice(0, 8).map(r => `• ${r.title}${r.list ? ' [' + r.list + ']' : ''}`).join('\n')
@@ -90,7 +93,9 @@ ${mailStr}
 
 Fasse alles in 5-7 flüssigen Sätzen zusammen. Sprich Alex direkt mit "du" an.
 Beginne mit dem Datum und Wetter. Erwähne dann Termine, wichtige Aufgaben und ob viele Mails warten.
-Kein Dialekt. Klares Hochdeutsch. Keine Aufzählungen – fließender Text.`
+Kein Dialekt. Klares Hochdeutsch. Keine Aufzählungen – fließender Text.
+
+WICHTIG: Wenn oben "Kalender-Zugriff fehlgeschlagen" steht, NIEMALS so tun als wären keine Termine. Stattdessen ehrlich sagen: "den Kalender konnte ich gerade nicht abrufen".`
 
   try {
     const response = await geminiChat({

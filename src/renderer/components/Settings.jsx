@@ -67,6 +67,14 @@ export default function Settings({ onClose }) {
     if (!confirm('Aggressive-Mode: ALLE auto-erstellten Firmen-Stubs werden zum Trash vorgeschlagen.\n\nWhitelist: VINCI/_keep_auto.json (Array von Namen).\n\nFortfahren?')) return
     runCleanScan({ aggressiveAutoCreated: true })
   }
+  const [brokenLinkResult, setBrokenLinkResult] = useState(null)
+  async function runBrokenLinkCleanup(dryRun = true) {
+    setCleanBusy(true)
+    try {
+      const r = await window.lyra.cleanerBrokenLinks({ dryRun })
+      setBrokenLinkResult(r)
+    } finally { setCleanBusy(false) }
+  }
   function toggleProposal(id) {
     if (!cleanPlan) return
     setCleanPlan({
@@ -721,6 +729,26 @@ export default function Settings({ onClose }) {
               <button className="btn-secondary" disabled={cleanBusy || !cleanPlan} onClick={runCleanDry}>2. Dry-Run</button>
               <button className="btn-secondary" disabled={cleanBusy || !cleanPlan} onClick={runCleanApply}>3. Echt anwenden (mit Backup)</button>
             </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+              <button className="btn-secondary" disabled={cleanBusy} onClick={() => runBrokenLinkCleanup(true)} title="Findet Wikilinks in Blog-Posts zu nicht-existierenden Entities (Ghost-Nodes im Obsidian-Graph)">
+                Ghost-Links scannen
+              </button>
+              <button className="btn-secondary" disabled={cleanBusy || !brokenLinkResult} onClick={() => runBrokenLinkCleanup(false)} title="Entfernt alle kaputten Wikilinks (Plain-Text bleibt) + räumt mentions-Frontmatter">
+                Ghost-Links entfernen
+              </button>
+            </div>
+            {brokenLinkResult && (
+              <div style={{ marginTop: 8, fontSize: '0.9em' }}>
+                {brokenLinkResult.error
+                  ? <span style={{ color: '#c74848' }}>⚠ {brokenLinkResult.error}</span>
+                  : <span>
+                      {brokenLinkResult.dryRun ? 'Dry-Run: ' : '✓ Angewendet: '}
+                      <strong>{brokenLinkResult.linksRemoved}</strong> Ghost-Links in <strong>{brokenLinkResult.filesChanged}</strong> Files
+                      ({brokenLinkResult.brokenTargetsCount} unique Ghost-Targets,
+                      {brokenLinkResult.knownEntitiesCount} echte Entities bekannt)
+                    </span>}
+              </div>
+            )}
             {cleanPlan && (
               <div style={{ marginTop: 12 }}>
                 <p style={{ fontSize: '0.9em' }}>

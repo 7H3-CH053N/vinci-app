@@ -1,4 +1,5 @@
 // Helpers for the web_saveToVault tool. Implementation lives here; the tool itself
+import { localISOString, localDateString } from './_localTime.js'
 // is registered as part of the existing webModule in web.js.
 
 import { existsSync, mkdirSync, writeFileSync } from 'fs'
@@ -42,7 +43,7 @@ export async function saveToVaultImpl(params, ctx) {
     return { error: 'title, summary und mindestens eine source sind nötig.' }
   }
 
-  const date = new Date().toISOString().slice(0, 10)
+  const date = localDateString()
   const slug = slugify(title)
   const dir = join(vault, 'inbox', 'web')
   mkdirSync(dir, { recursive: true })
@@ -56,7 +57,7 @@ export async function saveToVaultImpl(params, ctx) {
     `source: web`,
     'sources:',
     ...sources.map(u => `  - ${JSON.stringify(u)}`),
-    `fetched: "${new Date().toISOString()}"`,
+    `fetched: "${localISOString()}"`,
     `tags: [web-import, inbox]`,
     `status: zu-sichten`,
     `mentions: []`,

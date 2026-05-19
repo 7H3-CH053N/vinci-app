@@ -1,4 +1,5 @@
 // Proactive Daemons — Phase J4.
+import { localISOString, localDateString } from './_localTime.js'
 // Hintergrund-Worker die VINCI von reaktiv zu proaktiv machen.
 // Jeder Daemon: eigener Cron, eigene Cooldown, eigener Settings-Toggle.
 //
@@ -95,6 +96,16 @@ const DAEMONS = [
     settingsKey: 'proactive.quarantineReminder',
     defaultEnabled: true,
     run: runQuarantineReminder
+  },
+  {
+    id: 'weekly-review',
+    label: 'Weekly-Review',
+    description: 'Sonntags 19:00: erstellt automatisch den Wochenrückblick als Sub-Agent-Job.',
+    schedule: '0 19 * * 0',
+    cooldownMs: 6 * 24 * 60 * 60 * 1000,
+    settingsKey: 'proactive.weeklyReview',
+    defaultEnabled: true,
+    run: runWeeklyReview
   }
 ]
 
@@ -170,7 +181,7 @@ async function runVaultDrift(ctx) {
     }
   }
   if (postsWithoutMentions < 3) return
-  const key = `drift-${new Date().toISOString().slice(0,10)}`
+  const key = `drift-${localDateString()}`
   if (isOnCooldown('vault-drift', key, 6 * 24 * 60 * 60_000)) return
   markFired('vault-drift', key)
   notify(
@@ -211,7 +222,7 @@ async function runQuarantineReminder(ctx) {
   walk(quarDir)
   const ageDays = Math.floor(oldestAge / (24 * 60 * 60_000))
   if (totalFiles === 0 || ageDays < 14) return
-  const key = `quar-${new Date().toISOString().slice(0,10)}`
+  const key = `quar-${localDateString()}`
   if (isOnCooldown('quarantine-reminder', key, 6 * 24 * 60 * 60_000)) return
   markFired('quarantine-reminder', key)
   notify(
@@ -223,6 +234,39 @@ async function runQuarantineReminder(ctx) {
     }
   )
   logEvent('daemon_fired', { daemon: 'quarantine-reminder', totalFiles, ageDays })
+}
+
+// Triggert den Weekly-Review-Sub-Agent als Hintergrund-Job.
+// Anders als die anderen Daemons macht der hier nichts selbst — er stößt einen
+// Job in der Job-Queue an, und der Sub-Agent kümmert sich (gleiche Code-Pfad
+// wie manueller Chat-Trigger). Cooldown 6 Tage = max 1× pro Woche.
+async function runWeeklyReview(ctx) {
+  const key = `weekly-${localDateString()}`
+  if (isOnCooldown('weekly-review', key, 6 * 24 * 60 * 60_000)) return
+  markFired('weekly-review', key)
+  try {
+    // Dynamic-Import um Zyklus zu vermeiden (jobRunner importiert subAgents,
+    // subAgents werden u.a. von index.js geladen das auch daemons lädt).
+    const { enqueueAndRun } = await import('./_jobRunner.js')
+    const job = enqueueAndRun('weekly', {}, {
+      user_query: 'Cron: Sonntag 19:00 Weekly-Review',
+      ctx: { settings: ctx?.settings || {} }
+    })
+    console.log(`[Daemon weekly-review] Job ${job.id} eingereiht`)
+    logEvent('daemon_fired', { daemon: 'weekly-review', jobId: job.id })
+    // Notification an User
+    notify(
+      `📅 Wochenrückblick wird erstellt`,
+      `Sub-Agent läuft, Ergebnis erscheint im Chat in ~30s.`,
+      {
+        module: 'briefing',
+        spokenText: 'Alex, ich erstelle gerade deinen Wochenrückblick — gleich kommt er.'
+      }
+    )
+  } catch (err) {
+    console.warn('[Daemon weekly-review] enqueue failed:', err.message)
+    throw err
+  }
 }
 
 // ── Public API ─────────────────────────────────────────────────────────────────
@@ -247,6 +291,8 @@ function getDaemonEnabled(daemon) {
 export function rescheduleAll() {
   for (const [, j] of cronJobs) j.stop()
   cronJobs.clear()
+  // Fresh start — auto-disabled Daemons bekommen wieder eine Chance
+  _resetDaemonFailureState()
   for (const d of DAEMONS) {
     if (!getDaemonEnabled(d)) {
       console.log(`[ProactiveDaemons] ${d.id} disabled, skip`)
@@ -258,15 +304,42 @@ export function rescheduleAll() {
   }
 }
 
+// Auto-Disable bei wiederholten Fehlern. Verhindert dass im Dev-Mode (ohne TCC)
+// ein crashender Daemon stündlich Dutzende AppleScript-Permission-Checks triggert
+// und tccd überlastet. Reset bei App-Restart (failureCounts ist In-Memory).
+const failureCounts = new Map()           // daemonId → consecutive fails
+const FAILURE_THRESHOLD = 3                // ab 3 Fehlern wird der Daemon gestoppt
+const autoDisabled = new Set()             // disable bis App-Restart
+
 async function runDaemon(d) {
+  if (autoDisabled.has(d.id)) return       // bereits auto-disabled
   const settings = getSettingsHook() || {}
   const ctx = { settings, getSettings: getSettingsHook }
   try {
     await d.run(ctx)
+    failureCounts.delete(d.id)             // Reset bei Erfolg
   } catch (err) {
-    console.error(`[ProactiveDaemons] ${d.id} failed:`, err.message)
-    logEvent('daemon_error', { daemon: d.id, error: err.message })
+    const count = (failureCounts.get(d.id) || 0) + 1
+    failureCounts.set(d.id, count)
+    console.error(`[ProactiveDaemons] ${d.id} failed (${count}/${FAILURE_THRESHOLD}):`, err.message)
+    logEvent('daemon_error', { daemon: d.id, error: err.message, consecutive: count })
+    if (count >= FAILURE_THRESHOLD) {
+      autoDisabled.add(d.id)
+      const job = cronJobs.get(d.id)
+      if (job) { job.stop(); cronJobs.delete(d.id) }
+      console.warn(`[ProactiveDaemons] ${d.id} auto-disabled nach ${count} Fehlern in Folge (Reaktivierung: App-Neustart oder Settings)`)
+      logEvent('daemon_auto_disabled', { daemon: d.id, reason: 'consecutive_failures', count })
+    }
   }
+}
+
+export function _resetDaemonFailureState() {
+  failureCounts.clear()
+  autoDisabled.clear()
+}
+
+export function isDaemonAutoDisabled(id) {
+  return autoDisabled.has(id)
 }
 
 export function listDaemons() {
@@ -285,5 +358,5 @@ export async function runDaemonNow(id) {
   const d = DAEMONS.find(x => x.id === id)
   if (!d) return { error: 'Daemon nicht gefunden' }
   await runDaemon(d)
-  return { ok: true, ranAt: new Date().toISOString() }
+  return { ok: true, ranAt: localISOString() }
 }

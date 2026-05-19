@@ -1,4 +1,5 @@
 // ── Obsidian-Modul ─────────────────────────────────────────────────────────────
+import { localISOString, localDateString } from './_localTime.js'
 // Liest und durchsucht den Obsidian-Vault des Users (lokal, plain Markdown).
 // Vault-Pfad kommt aus settings.obsidian.vaultPath.
 //
@@ -70,7 +71,7 @@ export const obsidianModule = {
       if (!existsSync(notesDir)) mkdirSync(notesDir, { recursive: true })
 
       const safeTitle = title.replace(/[^\wäöüß \-_]/gi, '_').slice(0, 80) || 'Notiz'
-      const ts = new Date().toISOString().split('T')[0]
+      const ts = localDateString()
       const baseName = `${ts} – ${safeTitle}`
       let finalPath = join(notesDir, `${baseName}.md`)
       let suffix = 2
@@ -93,7 +94,7 @@ export const obsidianModule = {
         console.warn('[Obsidian] linkNoteToGraph failed (Notiz wird trotzdem gespeichert):', err.message)
       }
 
-      const body = `---\ncreated: ${new Date().toISOString()}\nsource: VINCI\n---\n\n# ${title}\n\n${linkedContent}\n`
+      const body = `---\ncreated: ${localISOString()}\nsource: VINCI\n---\n\n# ${title}\n\n${linkedContent}\n`
       writeFileSync(finalPath, body, 'utf8')
       const rel = relative(vault.root, finalPath)
       console.log('[Obsidian] Note created:', rel, '|', entityCount, 'Entities verlinkt')

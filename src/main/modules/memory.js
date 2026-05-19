@@ -1,4 +1,5 @@
 import { app } from 'electron'
+import { localISOString } from './_localTime.js'
 import { join } from 'path'
 import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, statSync } from 'fs'
 import { mirrorFactToGraph } from './obsidianGraph.js'
@@ -32,7 +33,7 @@ export function initMemory() {
 export function saveMessage(role, content, meta = null) {
   if (!initialized || !content?.trim()) return
   try {
-    const entry = { role, content: content.trim(), ts: new Date().toISOString() }
+    const entry = { role, content: content.trim(), ts: localISOString() }
     if (meta && typeof meta === 'object') entry.meta = meta
     appendFileSync(convPath(), JSON.stringify(entry) + '\n', 'utf8')
   } catch (err) {
@@ -88,7 +89,7 @@ export function saveFact(content, obsidianVaultPath, graphModel) {
   const clean = content.trim()
   try {
     const facts = readFacts()
-    facts.unshift({ content: clean, ts: new Date().toISOString() })
+    facts.unshift({ content: clean, ts: localISOString() })
     writeFacts(facts.slice(0, 100)) // max 100 facts
     console.log('[Memory] Fact saved:', clean.slice(0, 60))
     if (obsidianVaultPath) {

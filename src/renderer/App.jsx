@@ -9,6 +9,7 @@ import ChatPanel      from './components/ChatPanel.jsx'
 import Settings       from './components/Settings.jsx'
 import About          from './components/About.jsx'
 import Tasks          from './components/Tasks.jsx'
+import Jobs           from './components/Jobs.jsx'
 import Icon           from './components/Icons.jsx'
 
 export default function App() {
@@ -21,6 +22,7 @@ export default function App() {
 
   const { speak } = useTTS()
   const [chatOpen, setChatOpen] = useState(true)
+  const [activeJobCount, setActiveJobCount] = useState(0)
 
   useEffect(() => {
     window.lyra.getSettings().then(s => {
@@ -58,7 +60,44 @@ export default function App() {
       speak(text, { module: module || 'reminders' })
       setChatOpen(true)
     })
-    return () => { offBriefing?.(); offSettings?.(); offAbout?.(); offTasks?.(); offTaskRes?.(); offProactive?.() }
+    // Sub-Agent-Jobs (Phase J6) — Live-Count + Done-Notification + Chat-Inject
+    async function refreshActiveCount() {
+      try {
+        const r = await window.lyra.jobsList({ status: ['pending', 'running'] })
+        setActiveJobCount((r.jobs || []).length)
+      } catch {}
+    }
+    refreshActiveCount()
+    const offJob = window.lyra.on('lyra:job:event', ({ type, job }) => {
+      refreshActiveCount()
+      // Bei jedem Job-Event: falls noch keine Chat-Message mit diesem jobId
+      // existiert (= Job wurde über UI/Cron getriggert, nicht über Chat),
+      // eine Inline-Card-Message anlegen. So gibt's bei jedem Job eine sichtbare
+      // Karte im Chat — egal wer ihn ausgelöst hat.
+      if (type === 'started' && job?.id) {
+        const cur = useLyraStore.getState().messages
+        if (!cur.some(m => m.jobId === job.id)) {
+          const emoji = job.agent_type === 'researcher' ? '🔎'
+            : job.agent_type === 'briefing' ? '📋'
+            : job.agent_type === 'weekly' ? '📅'
+            : '◈'
+          addMessage({
+            role: 'assistant',
+            content: `${emoji} ${job.title}`,
+            jobId: job.id,
+            agentType: job.agent_type
+          })
+          setChatOpen(true)
+        }
+      }
+      // Speak die Kurzfassung bei done
+      if (type === 'done' && job?.summary) {
+        setChatOpen(true)
+        const mod = job.agent_type === 'briefing' || job.agent_type === 'weekly' ? 'briefing' : 'chat'
+        speak(job.summary, { module: mod })
+      }
+    })
+    return () => { offBriefing?.(); offSettings?.(); offAbout?.(); offTasks?.(); offTaskRes?.(); offProactive?.(); offJob?.() }
   }, [speak, addMessage, setView])
 
   function toggleChat() {
@@ -80,6 +119,9 @@ export default function App() {
   if (currentView === 'tasks') {
     return <div className="app"><Tasks onClose={() => setView('chat')} /></div>
   }
+  if (currentView === 'jobs') {
+    return <div className="app"><Jobs onClose={() => setView('chat')} /></div>
+  }
 
   return (
     <div className={`app ${isThinking ? 'is-thinking' : ''}`}>
@@ -88,6 +130,19 @@ export default function App() {
         <span className="lyra-wordmark">VINCI</span>
         <div className="titlebar-right" style={{ WebkitAppRegion: 'no-drag' }}>
           <button className="tb-btn" onClick={requestBriefing} title="Morgen-Briefing"><Icon.Sun /></button>
+          <button className="tb-btn" onClick={() => setView('jobs')} title={`Sub-Agent-Jobs${activeJobCount > 0 ? ` (${activeJobCount} aktiv)` : ''}`} style={{ position: 'relative' }}>
+            ⚙
+            {activeJobCount > 0 && (
+              <span style={{
+                position: 'absolute', top: -2, right: -2,
+                background: '#D4AF37', color: '#121414',
+                fontSize: 9, fontWeight: 700,
+                borderRadius: 8, minWidth: 14, height: 14,
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                padding: '0 3px'
+              }}>{activeJobCount}</span>
+            )}
+          </button>
           <button className="tb-btn" onClick={() => setView('settings')} title="Einstellungen"><Icon.Settings /></button>
           <button className="tb-btn" onClick={() => window.lyra.hideWindow()} title="Ausblenden"><Icon.X /></button>
         </div>

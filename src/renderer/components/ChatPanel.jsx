@@ -40,13 +40,27 @@ export default function ChatPanel() {
       if (result.error) {
         addMessage({ role: 'assistant', content: `⚠ ${result.error}`, isError: true })
       } else {
-        addMessage({ role: 'assistant', content: result.text })
-        // Vollständigen Text sprechen — keine Truncation mehr
-        const textToSpeak = result.text || ''
-        const shouldSpeak = textToSpeak.trim().length > 0
-        // Modul-Tag: vom Backend (Intent-Router) propagiert. Fallback 'chat'.
-        const mod = result.module || 'chat'
-        if (shouldSpeak) speak(textToSpeak, { module: mod })
+        // Sub-Agent-Trigger: Backend hat einen Job gespawned. Message bekommt
+        // jobId → MessageBubble rendert JobCard mit Live-Updates.
+        // Race-Schutz: App.jsx fügt bei "started"-Event ggf. schon eine Card hinzu.
+        // Prüfen ob die Card mit jobId schon existiert → dann nicht doppelt.
+        const already = result.jobId && useLyraStore.getState().messages.some(m => m.jobId === result.jobId)
+        if (!already) {
+          addMessage({
+            role: 'assistant',
+            content: result.text,
+            jobId: result.jobId || null,
+            agentType: result.agentType || null
+          })
+        }
+        // Bei Sub-Agent-Start NICHT die Bestätigung sprechen — App.jsx spricht
+        // dann die Done-Summary wenn der Job fertig ist (sonst doppelt TTS).
+        if (!result.jobId) {
+          const textToSpeak = result.text || ''
+          const shouldSpeak = textToSpeak.trim().length > 0
+          const mod = result.module || 'chat'
+          if (shouldSpeak) speak(textToSpeak, { module: mod })
+        }
       }
     } catch (err) {
       addMessage({ role: 'assistant', content: `⚠ ${err.message}`, isError: true })

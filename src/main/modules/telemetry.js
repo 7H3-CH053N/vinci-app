@@ -1,4 +1,5 @@
 // Lightweight structured logging for diagnostic events.
+import { localISOString } from './_localTime.js'
 // Schreibt JSONL nach ~/Library/Application Support/vinci/telemetry.log
 // Rotiert bei 5 MB → telemetry.log.1 (eine Generation).
 //
@@ -30,7 +31,7 @@ export function logEvent(type, payload = {}) {
   ensureDir()
   rotateIfNeeded()
   const entry = {
-    ts:   new Date().toISOString(),
+    ts:   localISOString(),
     type,
     ...payload
   }

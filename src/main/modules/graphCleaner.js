@@ -1,4 +1,5 @@
 // One-shot cleaner for the existing knowledge graph.
+import { localDateString } from './_localTime.js'
 // Three phases: scan (read-only) → review (UI) → apply (with backup).
 //
 // Proposal kinds:
@@ -145,7 +146,7 @@ export function scanVaultLocal(vaultPath, opts = {}) {
 }
 
 function planFilePath() {
-  const stamp = new Date().toISOString().slice(0, 10)
+  const stamp = localDateString()
   const dir = join(homedir(), 'Library', 'Application Support', 'vinci')
   mkdirSync(dir, { recursive: true })
   return join(dir, `cleanup-plan-${stamp}.json`)
@@ -240,7 +241,7 @@ export async function applyPlanLocal(vaultPath, plan) {
 export async function applyPlan(vaultPath, plan, { dryRun = true } = {}) {
   if (dryRun) return { dryRun: true, would_apply: plan.proposals.filter(p => p.accepted !== false).length, skipped: plan.proposals.filter(p => p.accepted === false).length }
   // Real run: backup first
-  const stamp = new Date().toISOString().slice(0, 10)
+  const stamp = localDateString()
   const archiveDir = join(homedir(), '.vinci-archive')
   mkdirSync(archiveDir, { recursive: true })
   const graphDir = join(vaultPath, 'VINCI')

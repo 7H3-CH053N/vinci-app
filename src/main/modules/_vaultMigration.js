@@ -1,4 +1,5 @@
 // One-shot migration of two orphan Mac-only vaults into the canonical vault.
+import { localDateString } from './_localTime.js'
 // All operations are dry-run-safe. Real writes happen only when dryRun=false.
 
 import { spawn } from 'child_process'
@@ -146,7 +147,7 @@ export async function applyMigration(canonicalVaultPath, plan, { dryRun = true }
   if (!dryRun) {
     const archiveDir = join(homedir(), '.vinci-archive')
     mkdirSync(archiveDir, { recursive: true })
-    const stamp = new Date().toISOString().slice(0, 10)
+    const stamp = localDateString()
     const vaultGraphDir = join(canonicalVaultPath, 'VINCI')
     if (existsSync(vaultGraphDir)) {
       await zipDirectory(vaultGraphDir, join(archiveDir, `${stamp}-pre-migration.zip`))
@@ -154,7 +155,7 @@ export async function applyMigration(canonicalVaultPath, plan, { dryRun = true }
   }
   const report = await applyMigrationFromPlan(plan, { dryRun })
   if (!dryRun) {
-    const stamp = new Date().toISOString().slice(0, 10)
+    const stamp = localDateString()
     const archiveTarget = join(homedir(), '.vinci-archive', `orphan-vaults-${stamp}`)
     mkdirSync(archiveTarget, { recursive: true })
     for (const orphan of ORPHAN_ROOTS) {

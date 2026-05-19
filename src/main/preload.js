@@ -15,11 +15,19 @@ contextBridge.exposeInMainWorld('lyra', {
   migrationPlan:   ()                 => ipcRenderer.invoke('lyra:migration:plan'),
   migrationApply:  (plan, opts)       => ipcRenderer.invoke('lyra:migration:apply', plan, opts),
   cleanerScan:     (opts)             => ipcRenderer.invoke('lyra:cleaner:scan', opts),
+  cleanerBrokenLinks: (opts)          => ipcRenderer.invoke('lyra:cleaner:brokenLinks', opts),
   cleanerApply:    (plan, opts)       => ipcRenderer.invoke('lyra:cleaner:apply', plan, opts),
   blogSync:        (opts)             => ipcRenderer.invoke('lyra:blog:sync', opts),
   blogRelinkAll:   ()                  => ipcRenderer.invoke('lyra:blog:relinkAll'),
   proactiveList:   ()                  => ipcRenderer.invoke('lyra:proactive:list'),
   proactiveRun:    (id)                => ipcRenderer.invoke('lyra:proactive:run', id),
+  // Sub-Agent Jobs (J6)
+  jobsList:        (opts)              => ipcRenderer.invoke('lyra:jobs:list', opts),
+  jobsGet:         (id)                => ipcRenderer.invoke('lyra:jobs:get', id),
+  jobsCancel:      (id)                => ipcRenderer.invoke('lyra:jobs:cancel', id),
+  jobsAgents:      ()                  => ipcRenderer.invoke('lyra:jobs:agents'),
+  jobsEnqueue:     (input)             => ipcRenderer.invoke('lyra:jobs:enqueue', input),
+  jobsCleanup:     ()                  => ipcRenderer.invoke('lyra:jobs:cleanup'),
   telemetryRecent: (n)                 => ipcRenderer.invoke('lyra:telemetry:recent', n),
   openExternal:    (url)              => ipcRenderer.send('lyra:open:external', url),
 
@@ -45,7 +53,7 @@ contextBridge.exposeInMainWorld('lyra', {
   haCall:  (domain, service, data)          => ipcRenderer.invoke('lyra:ha:call',  { domain, service, data }),
 
   on: (channel, callback) => {
-    const allowed = ['lyra:briefing', 'lyra:openSettings', 'lyra:openAbout', 'lyra:openTasks', 'lyra:ptt', 'lyra:taskResult', 'lyra:openTaskResult', 'lyra:proactive', 'lyra:openTab']
+    const allowed = ['lyra:briefing', 'lyra:openSettings', 'lyra:openAbout', 'lyra:openTasks', 'lyra:ptt', 'lyra:taskResult', 'lyra:openTaskResult', 'lyra:proactive', 'lyra:openTab', 'lyra:job:event']
     if (!allowed.includes(channel)) return
     const handler = (_, ...args) => callback(...args)
     ipcRenderer.on(channel, handler)
